@@ -1,0 +1,17 @@
+.vscode/**
+.github/**
+docs/**
+src/**
+node_modules/**
+!node_modules/nodes7/**
+out/test/**
+out/**/*.map
+.eslintrc.json
+.editorconfig
+.gitattributes
+.gitignore
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+tsconfig.json
+*.vsix

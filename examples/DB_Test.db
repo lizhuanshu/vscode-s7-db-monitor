@@ -1,0 +1,78 @@
+﻿TYPE "UDT1"
+VERSION : 0.1
+   STRUCT
+      "bool" : Bool;
+      "int" : Int;
+      bool_1 : Bool;
+      "string" : String;
+      string2 : String[10];
+      BoolTest_0 : Bool;
+      BoolTest_1 : Bool;
+      BoolTest_2 : Bool;
+      BoolTest_3 : Bool;
+      BoolTest_4 : Bool;
+      BoolTest_5 : Bool;
+      BoolTest_6 : Bool;
+      BoolTest_7 : Bool;
+      BoolTest_8 : Bool;
+      BoolTest_9 : Bool;
+   END_STRUCT;
+
+END_TYPE
+
+TYPE "UDT2"
+VERSION : 0.1
+   STRUCT
+      Udt1Array { S7_SetPoint := 'False'} : Array[0..1] of "UDT1";
+      boolArray : Array[0..10] of Bool;
+      bool_0 : Bool;
+      bool_1 : Bool;
+      bool_2 : Bool;
+      bool_3 : Bool;
+   END_STRUCT;
+
+END_TYPE
+
+DATA_BLOCK "DB_Test2"
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+NON_RETAIN
+   STRUCT 
+      "char" : Array[0..19] of Char;
+      "bool" : Bool;
+      "UDT1" : "UDT1";
+      test { S7_SetPoint := 'True'} : Byte;
+   END_STRUCT;
+
+
+BEGIN
+
+END_DATA_BLOCK
+
+DATA_BLOCK "DB_Test"
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+NON_RETAIN
+   STRUCT 
+      "bool" : Bool;
+      "int" : Int;
+      bool_0 : Bool;
+      bool_1 : Bool;
+      bool_2 : Bool;
+      bool_3 : Bool;
+      bool_4 : Bool;
+      bool_5 : Bool;
+      bool_6 : Bool;
+      bool_7 : Bool;
+      bool_8 : Bool;
+      bool_9 : Bool;
+      "udt1" { S7_SetPoint := 'False'} : "UDT1";
+      "udt2" : "UDT2";
+      boolEnd { S7_SetPoint := 'True'} : Bool;
+   END_STRUCT;
+
+
+BEGIN
+
+END_DATA_BLOCK
+

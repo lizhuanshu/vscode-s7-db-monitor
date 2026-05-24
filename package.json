@@ -1,0 +1,119 @@
+{
+  "name": "vscode-s7-db-monitor",
+  "displayName": "S7 DB Monitor",
+  "description": "Monitor Siemens S7 PLC DB blocks from TIA Portal exported .db files.",
+  "version": "0.0.1",
+  "publisher": "lizhuanshu",
+  "icon": "icon.png",
+  "author": "liming",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lizhuanshu/vscode-s7-db-monitor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lizhuanshu/vscode-s7-db-monitor/issues"
+  },
+  "homepage": "https://github.com/lizhuanshu/vscode-s7-db-monitor#readme",
+  "keywords": [
+    "vscode",
+    "extension",
+    "siemens",
+    "s7",
+    "plc",
+    "tia-portal",
+    "db-monitor"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCustomEditor:s7DbMonitor.dbEditor",
+    "onCommand:s7DbMonitor.openMonitor",
+    "onCommand:s7DbMonitor.openDbFile"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "s7DbMonitor.dbEditor",
+        "displayName": "S7 DB Monitor",
+        "selector": [
+          {
+            "filenamePattern": "*.db"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "s7DbMonitor.openMonitor",
+        "title": "S7 DB Monitor: Open Monitor"
+      },
+      {
+        "command": "s7DbMonitor.openDbFile",
+        "title": "S7 DB Monitor: Open DB File"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "s7DbMonitor.openDbFile",
+          "when": "resourceExtname == .db",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "S7 DB Monitor",
+      "properties": {
+        "s7DbMonitor.defaultHost": {
+          "type": "string",
+          "default": "192.168.0.1",
+          "description": "Default PLC IP address."
+        },
+        "s7DbMonitor.defaultRack": {
+          "type": "number",
+          "default": 0,
+          "description": "Default S7 rack number."
+        },
+        "s7DbMonitor.defaultSlot": {
+          "type": "number",
+          "default": 1,
+          "description": "Default S7 slot number."
+        },
+        "s7DbMonitor.pollIntervalMs": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "description": "Default polling interval in milliseconds."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node ./out/test/parserSmoke.test.js",
+    "lint": "eslint src --ext ts",
+    "check": "npm run lint && npm test",
+    "package": "vsce package",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "nodes7": "^0.3.18"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.14.1",
+    "@vscode/vsce": "^3.9.1",
+    "eslint": "^8.57.0",
+    "typescript": "^5.5.3"
+  }
+}
