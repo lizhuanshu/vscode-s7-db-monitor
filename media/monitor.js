@@ -446,7 +446,37 @@
     if (value === undefined || value === null) {
       return variable.readable ? '-' : '';
     }
+    const textValue = formatTextValue(variable, value);
+    if (textValue !== undefined) {
+      return textValue;
+    }
     return String(value);
+  }
+
+  function formatTextValue(variable, value) {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const type = normalizeTextType(variable.type);
+    if (type === 'char' || type === 'wchar') {
+      return isEmptyCharValue(value) ? "''" : `'${value}'`;
+    }
+    if (type.startsWith('string[') || type.startsWith('wstring[')) {
+      return value === '' ? "''" : undefined;
+    }
+    return undefined;
+  }
+
+  function isEmptyCharValue(value) {
+    if (value === '') {
+      return true;
+    }
+
+    return value.length === 1 && (value.charCodeAt(0) <= 0x1f || value.charCodeAt(0) === 0x7f);
+  }
+
+  function normalizeTextType(type) {
+    return type.trim().replace(/\s+/g, '').toLowerCase();
   }
 
   function renderStatus(updatedAt) {

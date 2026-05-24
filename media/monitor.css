@@ -342,6 +342,11 @@ th {
   font-weight: 600;
 }
 
+th:nth-child(4),
+td:nth-child(4) {
+  background: color-mix(in srgb, var(--vscode-editor-selectionBackground) 18%, transparent);
+}
+
 th:nth-child(1) {
   width: 30%;
 }
@@ -364,6 +369,10 @@ th:nth-child(5) {
 
 tbody tr:hover {
   background: var(--vscode-list-hoverBackground);
+}
+
+tbody tr:hover td:nth-child(4) {
+  background: color-mix(in srgb, var(--vscode-editor-selectionBackground) 28%, var(--vscode-list-hoverBackground));
 }
 
 .name-cell {
