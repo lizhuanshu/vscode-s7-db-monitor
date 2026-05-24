@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to semantic versioning before marketplace releases.
 
+## [0.0.2] - 2026-05-24
+
+### Added
+
+- Added expand-all and collapse-all controls for variable nodes.
+- Highlighted the live value column for easier monitoring.
+
+### Changed
+
+- Improved empty text display for `Char`, `WChar`, `String` and `WString` values.
+- Stopped displaying concatenated text on `Array[..] of Char` parent rows.
+
 ## [0.0.1] - 2026-05-24
 
 ### Added
