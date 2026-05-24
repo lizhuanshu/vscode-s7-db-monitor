@@ -236,6 +236,28 @@
       actions.appendChild(notice);
     }
 
+    const hasExpandableNodes = hasExpandableVariables(block.variables);
+
+    const expandAllButton = document.createElement('button');
+    expandAllButton.textContent = 'Expand All';
+    expandAllButton.disabled = !hasExpandableNodes;
+    expandAllButton.title = hasExpandableNodes ? 'Expand all variable nodes' : 'No expandable nodes';
+    expandAllButton.addEventListener('click', () => {
+      setAllExpanded(block.variables, true);
+      renderVariables();
+    });
+    actions.appendChild(expandAllButton);
+
+    const collapseAllButton = document.createElement('button');
+    collapseAllButton.textContent = 'Collapse All';
+    collapseAllButton.disabled = !hasExpandableNodes;
+    collapseAllButton.title = hasExpandableNodes ? 'Collapse all variable nodes' : 'No expandable nodes';
+    collapseAllButton.addEventListener('click', () => {
+      setAllExpanded(block.variables, false);
+      renderVariables();
+    });
+    actions.appendChild(collapseAllButton);
+
     const readButton = document.createElement('button');
     readButton.textContent = 'Read Once';
     readButton.disabled = block.number === undefined || state.status.state !== 'connected';
@@ -263,6 +285,24 @@
     actions.appendChild(continuousLabel);
 
     els.dbInfo.appendChild(actions);
+  }
+
+  function hasExpandableVariables(variables) {
+    for (const variable of variables) {
+      if (variable.children && variable.children.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function setAllExpanded(variables, expanded) {
+    for (const variable of variables) {
+      if (variable.children && variable.children.length > 0) {
+        state.expanded[variable.id] = expanded;
+        setAllExpanded(variable.children, expanded);
+      }
+    }
   }
 
   function infoItem(label, value, variant) {
