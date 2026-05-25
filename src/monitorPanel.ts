@@ -227,6 +227,7 @@ export class MonitorPanel {
 <body>
   <header class="titlebar">
     <div class="brand">S7 DB Monitor</div>
+    <a class="company-link" href="https://www.againdo.com/" title="Open AgainDo website" target="_blank" rel="noopener noreferrer">www.againdo.com</a>
     <label>IP <input id="host" type="text" autocomplete="off"></label>
     <label>Rack <input id="rack" type="number" min="0"></label>
     <label>Slot <input id="slot" type="number" min="0"></label>

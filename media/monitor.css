@@ -41,6 +41,17 @@ select {
   color: var(--vscode-sideBarTitle-foreground);
 }
 
+.company-link {
+  color: var(--vscode-textLink-foreground);
+  text-decoration: none;
+  padding-right: 8px;
+}
+
+.company-link:hover {
+  color: var(--vscode-textLink-activeForeground);
+  text-decoration: underline;
+}
+
 .titlebar label {
   display: inline-flex;
   align-items: center;
