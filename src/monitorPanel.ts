@@ -69,7 +69,6 @@ export class MonitorPanel {
     this.service.on('status', (status) => {
       this.status = status;
       this.post({ type: 'status', status });
-      this.postState();
     });
     this.service.on('values', (update) => this.postValues(update));
   }
@@ -105,6 +104,7 @@ export class MonitorPanel {
         break;
       case 'disconnect':
         this.service.disconnect();
+        this.postState();
         break;
       case 'readBlock':
         await this.service.readBlockOnce(message.dbId);

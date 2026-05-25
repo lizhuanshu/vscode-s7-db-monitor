@@ -69,10 +69,11 @@
       state.values[update.dbId] = update.values;
       if (update.dbId === state.activeDbId) {
         renderVariables();
-        renderVariableOps();
+        if (!isEditingInside(els.variableOps)) {
+          renderVariableOps();
+        }
       }
       renderStatus(update.updatedAt);
-      renderDbInfo();
     }
   });
 
@@ -97,10 +98,37 @@
   applySidebarLayout();
 
   function applyOptions() {
-    els.host.value = state.options.host;
-    els.rack.value = String(state.options.rack);
-    els.slot.value = String(state.options.slot);
-    els.pollIntervalMs.value = String(state.options.pollIntervalMs);
+    applyInputValue(els.host, state.options.host);
+    applyInputValue(els.rack, String(state.options.rack));
+    applyInputValue(els.slot, String(state.options.slot));
+    applyInputValue(els.pollIntervalMs, String(state.options.pollIntervalMs));
+  }
+
+  function applyInputValue(input, value) {
+    if (document.activeElement === input && isTextEditingElement(input)) {
+      return;
+    }
+    if (input.value !== value) {
+      input.value = value;
+    }
+  }
+
+  function isEditingInside(container) {
+    const active = document.activeElement;
+    return Boolean(active && container.contains(active) && isTextEditingElement(active));
+  }
+
+  function isTextEditingElement(element) {
+    if (element.tagName === 'TEXTAREA') {
+      return true;
+    }
+    if (element.tagName === 'SELECT') {
+      return true;
+    }
+    if (element.tagName !== 'INPUT') {
+      return false;
+    }
+    return !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(element.type);
   }
 
   function readOptions() {
