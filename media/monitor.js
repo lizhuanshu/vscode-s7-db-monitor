@@ -525,7 +525,7 @@
     els.variableOps.appendChild(header);
 
     const feedbackWrap = document.createElement('div');
-    feedbackWrap.className = 'operation-feedback-wrap';
+    feedbackWrap.className = currentOperationFeedback() ? 'operation-feedback-wrap' : 'operation-feedback-wrap hidden';
     feedbackWrap.appendChild(operationFeedbackElement());
     els.variableOps.appendChild(feedbackWrap);
 
@@ -748,6 +748,7 @@
     }
 
     const feedback = currentOperationFeedback();
+    element.parentElement?.classList.toggle('hidden', !feedback);
     element.className = feedback ? `operation-feedback ${feedback.kind}` : 'operation-feedback hidden';
     element.textContent = feedback ? feedback.message : '';
   }

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to semantic versioning before marketplace releases.
 
+## [0.0.5] - 2026-05-25
+
+### Changed
+
+- Improved variable operation panel layout with flex-based responsive design.
+- Improved operation feedback visibility management with CSS hidden class toggling.
+
 ## [0.0.4] - 2026-05-25
 
 ### Added

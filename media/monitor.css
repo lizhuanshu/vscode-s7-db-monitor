@@ -456,12 +456,12 @@ tbody tr.selected td:nth-child(4) {
 }
 
 .variable-ops {
-  min-height: 58px;
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(180px, 360px) auto;
+  min-height: 42px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 7px 10px;
+  gap: 6px 14px;
+  padding: 6px 10px;
   border-top: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
 }
@@ -473,11 +473,21 @@ tbody tr.selected td:nth-child(4) {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px 10px;
+}
+
+.operation-summary {
+  flex: 1 1 360px;
+}
+
+.operation-controls {
+  flex: 0 1 auto;
+  justify-content: flex-end;
 }
 
 .operation-feedback-wrap {
-  justify-content: center;
+  flex: 0 1 240px;
+  justify-content: flex-start;
 }
 
 .operation-field {
@@ -563,8 +573,11 @@ tbody tr.selected td:nth-child(4) {
 
 @media (max-width: 720px) {
   .variable-ops {
-    grid-template-columns: 1fr;
     align-items: start;
+  }
+
+  .operation-controls {
+    justify-content: flex-start;
   }
 }
 
