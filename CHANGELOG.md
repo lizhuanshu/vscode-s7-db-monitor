@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to semantic versioning before marketplace releases.
 
+## [0.0.4] - 2026-05-25
+
+### Added
+
+- Added an explicit notice that the project does not provide support.
+- Renamed the Marketplace extension identifier to `againdo-s7-db-monitor`.
+- Renamed the Marketplace display name to `S7 DB Monitor Plus`.
+
 ## [0.0.3] - 2026-05-25
 
 ### Added

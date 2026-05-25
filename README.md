@@ -6,6 +6,10 @@ English | [简体中文](README.zh-CN.md)
 
 S7 DB Monitor is a VS Code extension for monitoring Siemens S7 PLC DB blocks from TIA Portal exported `.db` source files. It opens `.db` files as a custom monitor view, parses the DB layout, reads DB bytes through the S7 protocol and decodes variable values locally.
 
+## Support Notice
+
+This project is provided as-is. The project does not provide technical support, troubleshooting, customization, maintenance, warranty or service commitments. Users are responsible for evaluating risks before using it with PLC devices.
+
 ![Demo](play.gif)
 
 ## Features
