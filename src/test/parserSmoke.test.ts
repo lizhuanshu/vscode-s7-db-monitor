@@ -94,6 +94,28 @@ assert.strictEqual(blocks[0]?.variables[3]?.children[2]?.offset.byte, 36);
 assert.strictEqual(blocks[0]?.variables[3]?.children[2]?.offset.bit, 0);
 assert.strictEqual(blocks[1]?.variables[1]?.offset.byte, 2);
 
+const boolByteSource = `
+DATA_BLOCK "BoolByteDb"
+STRUCT
+  flag : Bool;
+  byteValue : Byte;
+  wordValue : Word;
+  dwordValue : DWord;
+  lwordValue : LWord;
+END_STRUCT;
+BEGIN
+END_DATA_BLOCK
+`;
+
+const boolByteBlock = parseDbSource(boolByteSource, 'BoolByteDb.db');
+const boolByteVars = new Map(boolByteBlock.variables.map((variable) => [variable.name, variable]));
+assert.strictEqual(boolByteVars.get('flag')?.offset.byte, 0);
+assert.strictEqual(boolByteVars.get('flag')?.offset.bit, 0);
+assert.strictEqual(boolByteVars.get('byteValue')?.offset.byte, 1);
+assert.strictEqual(boolByteVars.get('wordValue')?.offset.byte, 2);
+assert.strictEqual(boolByteVars.get('dwordValue')?.offset.byte, 4);
+assert.strictEqual(boolByteVars.get('lwordValue')?.offset.byte, 8);
+
 const typeSource = `
 DATA_BLOCK "TypeDb"
 STRUCT

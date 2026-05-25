@@ -453,9 +453,16 @@ function parseTypeInfo(declaration: Declaration, context: ParserContext): TypeIn
 }
 
 function alignBeforeType(cursor: Cursor, typeInfo: TypeInfo): void {
-  if (typeInfo.displayType.toLowerCase() !== 'bool') {
-    alignToWord(cursor);
+  if (typeInfo.displayType.toLowerCase() === 'bool') {
+    return;
   }
+
+  if (typeInfo.size <= 1) {
+    alignToNextByte(cursor);
+    return;
+  }
+
+  alignToWord(cursor);
 }
 
 function advanceCursor(cursor: Cursor, typeInfo: TypeInfo): void {
@@ -468,7 +475,7 @@ function advanceCursor(cursor: Cursor, typeInfo: TypeInfo): void {
     return;
   }
 
-  alignToWord(cursor);
+  alignToNextByte(cursor);
   cursor.byte += typeInfo.size;
 }
 
