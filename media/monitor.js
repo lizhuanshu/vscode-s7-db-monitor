@@ -22,6 +22,7 @@
       message: 'Disconnected'
     }
   };
+  const blockCaches = new Map();
 
   const els = {
     host: document.getElementById('host'),
@@ -49,6 +50,7 @@
     const message = event.data;
     if (message.type === 'state') {
       state.blocks = message.blocks || [];
+      rebuildBlockCaches();
       state.options = message.options || state.options;
       state.status = message.status || state.status;
       state.continuousBlockId = message.continuousBlockId;
@@ -204,6 +206,7 @@
 
   function renderTabs() {
     els.tabs.textContent = '';
+    const fragment = document.createDocumentFragment();
     for (const block of state.blocks) {
       const tab = document.createElement('div');
       tab.className = block.id === state.activeDbId ? 'db-list-item active' : 'db-list-item';
@@ -255,8 +258,9 @@
       numberWrap.appendChild(input);
       tab.appendChild(numberWrap);
 
-      els.tabs.appendChild(tab);
+      fragment.appendChild(tab);
     }
+    els.tabs.appendChild(fragment);
   }
 
   function renderDbInfo() {
@@ -273,7 +277,7 @@
     identity.appendChild(infoItem('Block', block.name, 'wide'));
     identity.appendChild(infoItem('Number', block.number === undefined ? 'Not set' : `DB${block.number}`));
     identity.appendChild(infoItem('Read size', `${block.readSize} bytes`));
-    identity.appendChild(infoItem('Variables', String(countVariables(block.variables))));
+    identity.appendChild(infoItem('Variables', String(blockCache(block).variableCount)));
     els.dbInfo.appendChild(identity);
 
     const actions = document.createElement('div');
@@ -286,7 +290,7 @@
       actions.appendChild(notice);
     }
 
-    const hasExpandableNodes = hasExpandableVariables(block.variables);
+    const hasExpandableNodes = blockCache(block).hasExpandableNodes;
 
     const expandAllButton = document.createElement('button');
     expandAllButton.textContent = 'Expand All';
@@ -337,15 +341,6 @@
     els.dbInfo.appendChild(actions);
   }
 
-  function hasExpandableVariables(variables) {
-    for (const variable of variables) {
-      if (variable.children && variable.children.length > 0) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   function setAllExpanded(variables, expanded) {
     for (const variable of variables) {
       if (variable.children && variable.children.length > 0) {
@@ -372,15 +367,6 @@
     return item;
   }
 
-  function countVariables(variables) {
-    let count = 0;
-    for (const variable of variables) {
-      count++;
-      count += countVariables(variable.children || []);
-    }
-    return count;
-  }
-
   function parseDbNumber(value) {
     const trimmed = value.trim();
     if (!trimmed) {
@@ -404,12 +390,14 @@
     }
 
     ensureSelectedVariable();
+    const fragment = document.createDocumentFragment();
     for (const variable of block.variables) {
-      renderVariableRow(variable, 0);
+      renderVariableRow(variable, 0, fragment);
     }
+    els.variables.appendChild(fragment);
   }
 
-  function renderVariableRow(variable, level) {
+  function renderVariableRow(variable, level, target) {
     const tr = document.createElement('tr');
     tr.className = variable.id === state.selectedVariableId ? 'selected' : '';
     tr.title = variable.readable ? 'Select variable' : 'This variable is a container';
@@ -463,11 +451,11 @@
     applyValueCell(valueCell, variable);
     tr.appendChild(valueCell);
     tr.appendChild(textCell(variable.id));
-    els.variables.appendChild(tr);
+    target.appendChild(tr);
 
     if (hasChildren && isExpanded(variable.id)) {
       for (const child of variable.children) {
-        renderVariableRow(child, level + 1);
+        renderVariableRow(child, level + 1, target);
       }
     }
   }
@@ -478,22 +466,14 @@
       return;
     }
 
-    const valueCells = new Map();
+    const cache = blockCache(block);
     for (const cell of els.variables.querySelectorAll('[data-value-id]')) {
-      valueCells.set(cell.dataset.valueId, cell);
-    }
-    updateVariableValueRows(block.variables, valueCells);
-    updateOperationCurrentValue();
-  }
-
-  function updateVariableValueRows(variables, valueCells) {
-    for (const variable of variables) {
-      const cell = valueCells.get(variable.id);
-      if (cell) {
+      const variable = cache.variableById.get(cell.dataset.valueId);
+      if (variable) {
         applyValueCell(cell, variable);
       }
-      updateVariableValueRows(variable.children || [], valueCells);
     }
+    updateOperationCurrentValue();
   }
 
   function applyValueCell(cell, variable) {
@@ -806,20 +786,7 @@
     if (!block || !state.selectedVariableId) {
       return undefined;
     }
-    return findVariableById(block.variables, state.selectedVariableId);
-  }
-
-  function findVariableById(variables, id) {
-    for (const variable of variables) {
-      if (variable.id === id) {
-        return variable;
-      }
-      const child = findVariableById(variable.children || [], id);
-      if (child) {
-        return child;
-      }
-    }
-    return undefined;
+    return blockCache(block).variableById.get(state.selectedVariableId);
   }
 
   function ensureSelectedVariable() {
@@ -829,22 +796,59 @@
       return;
     }
 
-    const variables = flattenVariables(block.variables);
-    if (variables.some((variable) => variable.id === state.selectedVariableId)) {
+    const cache = blockCache(block);
+    if (state.selectedVariableId && cache.variableById.has(state.selectedVariableId)) {
       return;
     }
 
-    const firstReadable = variables.find((variable) => variable.readable);
-    state.selectedVariableId = firstReadable && firstReadable.id;
+    state.selectedVariableId = cache.firstReadableId;
   }
 
-  function flattenVariables(variables) {
-    const result = [];
-    for (const variable of variables) {
-      result.push(variable);
-      result.push(...flattenVariables(variable.children || []));
+  function rebuildBlockCaches() {
+    blockCaches.clear();
+    for (const block of state.blocks) {
+      blockCaches.set(block.id, createBlockCache(block.variables));
     }
-    return result;
+  }
+
+  function blockCache(block) {
+    let cache = blockCaches.get(block.id);
+    if (!cache) {
+      cache = createBlockCache(block.variables);
+      blockCaches.set(block.id, cache);
+    }
+    return cache;
+  }
+
+  function createBlockCache(variables) {
+    const variableById = new Map();
+    let variableCount = 0;
+    let firstReadableId;
+    let hasExpandableNodes = false;
+    const stack = [...variables].reverse();
+
+    while (stack.length > 0) {
+      const variable = stack.pop();
+      if (!variable) {
+        continue;
+      }
+
+      variableCount++;
+      variableById.set(variable.id, variable);
+      if (firstReadableId === undefined && variable.readable) {
+        firstReadableId = variable.id;
+      }
+
+      const children = variable.children || [];
+      if (children.length > 0) {
+        hasExpandableNodes = true;
+        for (let index = children.length - 1; index >= 0; index--) {
+          stack.push(children[index]);
+        }
+      }
+    }
+
+    return { variableById, variableCount, firstReadableId, hasExpandableNodes };
   }
 
   function currentValues() {

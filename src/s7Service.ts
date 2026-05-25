@@ -23,13 +23,14 @@ export class S7Service extends EventEmitter {
   private connection?: NodeS7Connection;
   private options?: PlcConnectionOptions;
   private blocks: ParsedDbBlock[] = [];
+  private variableByBlockId = new Map<string, Map<string, DbVariable>>();
   private continuousBlockId?: string;
   private timer?: NodeJS.Timeout;
   private polling = false;
 
   public async connect(options: PlcConnectionOptions, blocks: ParsedDbBlock[]): Promise<void> {
     this.options = options;
-    this.blocks = blocks;
+    this.updateBlocks(blocks);
     this.stopContinuousRead();
     this.emitStatus('connecting', `Connecting to ${options.host}...`);
 
@@ -67,7 +68,7 @@ export class S7Service extends EventEmitter {
   }
 
   public setBlocks(blocks: ParsedDbBlock[]): void {
-    this.blocks = blocks;
+    this.updateBlocks(blocks);
   }
 
   public async readBlockOnce(dbId: string): Promise<void> {
@@ -90,7 +91,7 @@ export class S7Service extends EventEmitter {
         return;
       }
 
-      const variable = flattenVariables(block.variables).find((item) => item.id === request.variableId);
+      const variable = this.getVariable(block, request.variableId);
       if (!variable) {
         this.emitStatus('error', 'Variable was not found.');
         return;
@@ -121,7 +122,7 @@ export class S7Service extends EventEmitter {
         return;
       }
 
-      const variable = flattenVariables(block.variables).find((item) => item.id === request.variableId);
+      const variable = this.getVariable(block, request.variableId);
       if (!variable) {
         this.emitStatus('error', 'Variable was not found.');
         return;
@@ -204,6 +205,15 @@ export class S7Service extends EventEmitter {
       return undefined;
     }
     return block;
+  }
+
+  private updateBlocks(blocks: ParsedDbBlock[]): void {
+    this.blocks = blocks;
+    this.variableByBlockId = createVariableIndexes(blocks);
+  }
+
+  private getVariable(block: ParsedDbBlock, variableId: string): DbVariable | undefined {
+    return this.variableByBlockId.get(block.id)?.get(variableId);
   }
 
   private async pollBlock(block: ParsedDbBlock): Promise<void> {
@@ -298,6 +308,18 @@ function createByteAddress(dbNumber: number, byteOffset: number): string {
 
 function byteArrayWriteValue(bytes: Buffer): number | number[] {
   return bytes.length === 1 ? bytes[0] ?? 0 : [...bytes];
+}
+
+function createVariableIndexes(blocks: ParsedDbBlock[]): Map<string, Map<string, DbVariable>> {
+  const indexes = new Map<string, Map<string, DbVariable>>();
+  for (const block of blocks) {
+    const variables = new Map<string, DbVariable>();
+    for (const variable of flattenVariables(block.variables)) {
+      variables.set(variable.id, variable);
+    }
+    indexes.set(block.id, variables);
+  }
+  return indexes;
 }
 
 export interface VariableWrite {
