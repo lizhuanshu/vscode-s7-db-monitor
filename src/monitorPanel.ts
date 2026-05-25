@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { parseDbBlocks } from './dbParser';
-import { MonitorStatus, ParsedDbBlock, PlcConnectionOptions, VariableValueUpdate, VariableWriteRequest } from './model';
+import { MonitorStatus, ParsedDbBlock, PlcConnectionOptions, VariablePulseRequest, VariableValueUpdate, VariableWriteRequest } from './model';
 import { S7Service } from './s7Service';
 
 type WebviewMessage =
@@ -12,6 +12,7 @@ type WebviewMessage =
   | { type: 'setContinuousRead'; dbId: string; enabled: boolean }
   | { type: 'setDbNumber'; dbId: string; number?: number }
   | { type: 'writeVariable'; request: VariableWriteRequest }
+  | { type: 'pulseVariable'; request: VariablePulseRequest }
   | { type: 'saveConnectionOptions'; options: PlcConnectionOptions }
   | { type: 'ready' };
 
@@ -118,6 +119,9 @@ export class MonitorPanel {
         break;
       case 'writeVariable':
         await this.service.writeVariable(message.request);
+        break;
+      case 'pulseVariable':
+        await this.service.pulseBoolVariable(message.request);
         break;
       case 'saveConnectionOptions':
         this.saveConnectionOptions(message.options);

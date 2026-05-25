@@ -9,6 +9,7 @@
     values: {},
     expanded: {},
     writeRadix: 10,
+    boolPulseMs: 500,
     options: {
       host: '192.168.0.1',
       rack: 0,
@@ -41,6 +42,7 @@
   };
   const persisted = vscode.getState() || {};
   state.sidebarWidth = clampSidebarWidth(persisted.sidebarWidth || 280);
+  state.boolPulseMs = clampPulseMs(persisted.boolPulseMs || state.boolPulseMs);
 
   window.addEventListener('message', (event) => {
     const message = event.data;
@@ -172,12 +174,21 @@
 
   function persistUiState() {
     vscode.setState({
-      sidebarWidth: state.sidebarWidth
+      sidebarWidth: state.sidebarWidth,
+      boolPulseMs: state.boolPulseMs
     });
   }
 
   function clampSidebarWidth(width) {
     return Math.min(Math.max(Number(width) || 280, 180), 520);
+  }
+
+  function clampPulseMs(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return 500;
+    }
+    return Math.min(Math.max(Math.round(number), 0), 600000);
   }
 
   function render() {
@@ -497,26 +508,76 @@
     }
 
     if (writable === 'bool') {
-      const label = document.createElement('label');
-      label.className = 'switch operation-switch';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = currentValues()[variable.id] === true;
-      input.disabled = !canWrite;
-      input.addEventListener('change', () => {
+      const writeBool = (value) => {
         vscode.postMessage({
           type: 'writeVariable',
           request: {
             dbId: block.id,
             variableId: variable.id,
-            value: input.checked
+            value
           }
         });
+      };
+
+      const falseButton = document.createElement('button');
+      falseButton.textContent = 'False';
+      falseButton.disabled = !canWrite;
+      falseButton.addEventListener('click', () => writeBool(false));
+      controls.appendChild(falseButton);
+
+      const trueButton = document.createElement('button');
+      trueButton.textContent = 'True';
+      trueButton.disabled = !canWrite;
+      trueButton.addEventListener('click', () => writeBool(true));
+      controls.appendChild(trueButton);
+
+      const pulseLabel = document.createElement('label');
+      pulseLabel.className = 'operation-field compact pulse-field';
+      pulseLabel.textContent = 'Pulse(ms)';
+      const pulseInput = document.createElement('input');
+      pulseInput.type = 'number';
+      pulseInput.min = '0';
+      pulseInput.max = '600000';
+      pulseInput.step = '10';
+      pulseInput.value = String(state.boolPulseMs);
+      pulseInput.disabled = !canWrite;
+      pulseInput.addEventListener('change', () => {
+        state.boolPulseMs = clampPulseMs(pulseInput.value);
+        pulseInput.value = String(state.boolPulseMs);
+        persistUiState();
       });
-      label.appendChild(input);
-      label.appendChild(document.createTextNode('Set Bool'));
-      controls.appendChild(label);
-    } else if (writable === 'integer' || writable === 'float') {
+      pulseLabel.appendChild(pulseInput);
+      controls.appendChild(pulseLabel);
+
+      const pulse = (pattern) => {
+        state.boolPulseMs = clampPulseMs(pulseInput.value);
+        pulseInput.value = String(state.boolPulseMs);
+        persistUiState();
+        vscode.postMessage({
+          type: 'pulseVariable',
+          request: {
+            dbId: block.id,
+            variableId: variable.id,
+            pattern,
+            pulseMs: state.boolPulseMs
+          }
+        });
+      };
+
+      const falseTrueFalseButton = document.createElement('button');
+      falseTrueFalseButton.textContent = 'F-T-F';
+      falseTrueFalseButton.title = 'Write False, wait, True, wait, False';
+      falseTrueFalseButton.disabled = !canWrite;
+      falseTrueFalseButton.addEventListener('click', () => pulse('false-true-false'));
+      controls.appendChild(falseTrueFalseButton);
+
+      const trueFalseTrueButton = document.createElement('button');
+      trueFalseTrueButton.textContent = 'T-F-T';
+      trueFalseTrueButton.title = 'Write True, wait, False, wait, True';
+      trueFalseTrueButton.disabled = !canWrite;
+      trueFalseTrueButton.addEventListener('click', () => pulse('true-false-true'));
+      controls.appendChild(trueFalseTrueButton);
+    } else if (writable !== 'unsupported') {
       if (writable === 'integer') {
         const radixLabel = document.createElement('label');
         radixLabel.className = 'operation-field compact';
@@ -549,7 +610,7 @@
       input.type = 'text';
       input.disabled = !canWrite;
       input.value = defaultWriteValue(variable, writable);
-      input.placeholder = writable === 'integer' ? '0' : '0.0';
+      input.placeholder = writePlaceholder(variable, writable);
       valueLabel.appendChild(input);
       controls.appendChild(valueLabel);
 
@@ -648,6 +709,12 @@
     if (type === 'real' || type === 'lreal') {
       return 'float';
     }
+    if (['date', 'time', 'tod', 'time_of_day', 'timeofday', 'ltod', 'ltime_of_day', 'ltimeofday', 'dt', 'date_and_time', 'dateandtime', 'ldt', 'dtl'].includes(type)) {
+      return 'datetime';
+    }
+    if (type === 'char' || type === 'wchar' || type.startsWith('string[') || type.startsWith('wstring[')) {
+      return 'text';
+    }
     return 'unsupported';
   }
 
@@ -674,7 +741,40 @@
     if (kind === 'float' && typeof value === 'number') {
       return String(value);
     }
+    if (kind === 'text' && typeof value === 'string' && ['char', 'wchar'].includes(normalizeValueType(variable.type)) && isEmptyCharValue(value)) {
+      return '';
+    }
+    if ((kind === 'datetime' || kind === 'text') && typeof value === 'string') {
+      return value;
+    }
     return '';
+  }
+
+  function writePlaceholder(variable, kind) {
+    if (kind === 'integer') {
+      return '0';
+    }
+    if (kind === 'float') {
+      return '0.0';
+    }
+
+    const type = normalizeValueType(variable.type);
+    if (type === 'date') {
+      return '1990-01-01';
+    }
+    if (type === 'time') {
+      return 'T#0d_00:00:00.000';
+    }
+    if (type === 'tod' || type === 'time_of_day' || type === 'timeofday') {
+      return '00:00:00.000';
+    }
+    if (type === 'ltod' || type === 'ltime_of_day' || type === 'ltimeofday') {
+      return '00:00:00.000000000';
+    }
+    if (type === 'dt' || type === 'date_and_time' || type === 'dateandtime' || type === 'ldt' || type === 'dtl') {
+      return '1990-01-01T00:00:00.000Z';
+    }
+    return 'text';
   }
 
   function formatIntegerValue(value, radix) {

@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { parseDbBlocks, parseDbSource } from '../dbParser';
+import { createVariableWrite } from '../s7Service';
 import { decodeVariable } from '../valueDecoder';
 
 const source = `
@@ -174,5 +175,47 @@ assert.strictEqual(decodeVariable(buffer, typeVars.get('t')!), 'T#0d_01:02:03.00
 assert.strictEqual(decodeVariable(buffer, typeVars.get('tod')!), '01:02:03.004');
 assert.strictEqual(decodeVariable(buffer, typeVars.get('lr')!), 12.5);
 assert.strictEqual(decodeVariable(buffer, typeVars.get('s')!), 'OK');
+
+const dateWrite = createVariableWrite(1, typeVars.get('d')!, '1990-01-02');
+assert.deepStrictEqual(dateWrite.value, [0, 1]);
+
+const timeWrite = createVariableWrite(1, typeVars.get('t')!, 'T#0d_01:02:03.004');
+const timeBytes = Buffer.alloc(4);
+timeBytes.writeInt32BE(3723004, 0);
+assert.deepStrictEqual(timeWrite.value, [...timeBytes]);
+
+const todWrite = createVariableWrite(1, typeVars.get('tod')!, '01:02:03.004');
+const todBytes = Buffer.alloc(4);
+todBytes.writeUInt32BE(3723004, 0);
+assert.deepStrictEqual(todWrite.value, [...todBytes]);
+
+const ltodWrite = createVariableWrite(1, typeVars.get('ltod')!, '00:00:00.000000001');
+const ltodBytes = Buffer.alloc(8);
+ltodBytes.writeBigUInt64BE(1n, 0);
+assert.deepStrictEqual(ltodWrite.value, [...ltodBytes]);
+
+assert.deepStrictEqual(createVariableWrite(1, typeVars.get('dt')!, '1990-01-02T03:04:05.006Z').value, [0x90, 0x01, 0x02, 0x03, 0x04, 0x05, 0x00, 0x63]);
+
+const ldtWrite = createVariableWrite(1, typeVars.get('ldt')!, '1990-01-01T00:00:00.001Z');
+const ldtBytes = Buffer.alloc(8);
+ldtBytes.writeBigInt64BE(1000000n, 0);
+assert.deepStrictEqual(ldtWrite.value, [...ldtBytes]);
+
+const dtlWrite = createVariableWrite(1, typeVars.get('dtl')!, '2024-05-06T07:08:09.010Z');
+const dtlBytes = Buffer.alloc(12);
+dtlBytes.writeUInt16BE(2024, 0);
+dtlBytes.writeUInt8(5, 2);
+dtlBytes.writeUInt8(6, 3);
+dtlBytes.writeUInt8(2, 4);
+dtlBytes.writeUInt8(7, 5);
+dtlBytes.writeUInt8(8, 6);
+dtlBytes.writeUInt8(9, 7);
+dtlBytes.writeUInt32BE(10000000, 8);
+assert.deepStrictEqual(dtlWrite.value, [...dtlBytes]);
+
+assert.strictEqual(createVariableWrite(1, typeVars.get('c')!, 'A').value, 65);
+assert.deepStrictEqual(createVariableWrite(1, typeVars.get('wc')!, '\u4E2D').value, [0x4e, 0x2d]);
+assert.deepStrictEqual(createVariableWrite(1, typeVars.get('s')!, 'OK').value, [4, 2, 79, 75, 0, 0]);
+assert.deepStrictEqual(createVariableWrite(1, typeVars.get('ws')!, '\u597D').value, [0, 4, 0, 1, 0x59, 0x7d, 0, 0, 0, 0, 0, 0]);
 
 console.log('parser smoke test passed');

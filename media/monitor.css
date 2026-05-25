@@ -489,6 +489,10 @@ tbody tr.selected td:nth-child(4) {
   width: 72px;
 }
 
+.operation-field.compact input {
+  width: 86px;
+}
+
 .operation-field input:focus,
 .operation-field select:focus {
   border-color: var(--vscode-focusBorder);

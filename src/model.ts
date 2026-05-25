@@ -51,3 +51,12 @@ export interface VariableWriteRequest {
   value: string | number | boolean;
   radix?: number;
 }
+
+export type BoolPulsePattern = 'false-true-false' | 'true-false-true';
+
+export interface VariablePulseRequest {
+  dbId: string;
+  variableId: string;
+  pattern: BoolPulsePattern;
+  pulseMs: number;
+}
