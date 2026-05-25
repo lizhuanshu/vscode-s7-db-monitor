@@ -33,6 +33,57 @@ VERSION : 0.1
 
 END_TYPE
 
+DATA_BLOCK "DB_Test3"
+{ S7_Optimized_Access := 'FALSE' }
+VERSION : 0.1
+NON_RETAIN
+   STRUCT 
+      "Binary numbers" : Struct
+         "Bool" : Bool;
+         "Byte" : Byte;
+         "Word" : Word;
+         "DWord" : DWord;
+         "LWord" : LWord;
+      END_STRUCT;
+      Integers : Struct
+         "SInt" : SInt;
+         "Int" : Int;
+         "DInt" : DInt;
+         "USInt" : USInt;
+         "UInt" : UInt;
+         "UDInt" : UDInt;
+         "LInt" : LInt;
+         "ULInt" : ULInt;
+      END_STRUCT;
+      "Floating point" : Struct
+         "Real" : Real;
+         "LReal" : LReal;
+      END_STRUCT;
+      "Date and time" : Struct
+         "Date" : Date;
+         "Time" : Time;
+         "TOD" : Time_Of_Day;
+         LTOD : LTime_Of_Day;
+         "DT" : Date_And_Time;
+         LDT : LDT;
+         DTL {InstructionName := 'DTL'; LibVersion := '1.0'} : DTL;
+      END_STRUCT;
+      Strings : Struct
+         "Char" : Char;
+         "WChar" : WChar;
+         "String[n]" : String[20];
+         "WString[n]" : WString[20];
+         "String" : String;
+         "WString" : WString;
+      END_STRUCT;
+      "bool" : Bool;
+   END_STRUCT;
+
+
+BEGIN
+
+END_DATA_BLOCK
+
 DATA_BLOCK "DB_Test2"
 { S7_Optimized_Access := 'FALSE' }
 VERSION : 0.1

@@ -2,7 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { parseDbBlocks } from './dbParser';
-import { MonitorStatus, ParsedDbBlock, PlcConnectionOptions, VariableValueUpdate } from './model';
+import { MonitorStatus, ParsedDbBlock, PlcConnectionOptions, VariableValueUpdate, VariableWriteRequest } from './model';
 import { S7Service } from './s7Service';
 
 type WebviewMessage =
@@ -11,6 +11,7 @@ type WebviewMessage =
   | { type: 'readBlock'; dbId: string }
   | { type: 'setContinuousRead'; dbId: string; enabled: boolean }
   | { type: 'setDbNumber'; dbId: string; number?: number }
+  | { type: 'writeVariable'; request: VariableWriteRequest }
   | { type: 'saveConnectionOptions'; options: PlcConnectionOptions }
   | { type: 'ready' };
 
@@ -114,6 +115,9 @@ export class MonitorPanel {
         break;
       case 'setDbNumber':
         this.setDbNumber(message.dbId, message.number);
+        break;
+      case 'writeVariable':
+        await this.service.writeVariable(message.request);
         break;
       case 'saveConnectionOptions':
         this.saveConnectionOptions(message.options);
@@ -251,6 +255,7 @@ export class MonitorPanel {
         </table>
         <div id="empty" class="empty">Open a .db file to start monitoring.</div>
       </section>
+      <section id="variableOps" class="variable-ops"></section>
     </section>
   </main>
   <footer class="statusbar">

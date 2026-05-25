@@ -18,7 +18,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -199,7 +200,7 @@ input {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .db-info {
@@ -371,8 +372,17 @@ tbody tr:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
+tbody tr.selected {
+  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
 tbody tr:hover td:nth-child(4) {
   background: color-mix(in srgb, var(--vscode-editor-selectionBackground) 28%, var(--vscode-list-hoverBackground));
+}
+
+tbody tr.selected td:nth-child(4) {
+  background: color-mix(in srgb, var(--vscode-editor-selectionBackground) 36%, var(--vscode-list-activeSelectionBackground));
 }
 
 .name-cell {
@@ -432,6 +442,90 @@ tbody tr:hover td:nth-child(4) {
 
 .empty.hidden {
   display: none;
+}
+
+.variable-ops {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-sideBar-background);
+}
+
+.operation-summary,
+.operation-controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.operation-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.operation-field input,
+.operation-field select {
+  height: 26px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  padding: 2px 7px;
+  outline: none;
+}
+
+.operation-field input {
+  width: 150px;
+}
+
+.operation-field.compact select {
+  width: 72px;
+}
+
+.operation-field input:focus,
+.operation-field select:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.operation-controls button {
+  height: 26px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  padding: 2px 10px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.operation-controls button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.operation-controls button:disabled,
+.operation-field input:disabled,
+.operation-field select:disabled,
+.operation-switch input:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.operation-notice {
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .variable-ops {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
 }
 
 .statusbar {

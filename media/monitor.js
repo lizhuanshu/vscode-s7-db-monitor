@@ -4,9 +4,11 @@
   const state = {
     blocks: [],
     activeDbId: undefined,
+    selectedVariableId: undefined,
     continuousBlockId: undefined,
     values: {},
     expanded: {},
+    writeRadix: 10,
     options: {
       host: '192.168.0.1',
       rack: 0,
@@ -31,6 +33,7 @@
     tabs: document.getElementById('tabs'),
     dbInfo: document.getElementById('dbInfo'),
     variables: document.getElementById('variables'),
+    variableOps: document.getElementById('variableOps'),
     empty: document.getElementById('empty'),
     statusState: document.getElementById('statusState'),
     statusMessage: document.getElementById('statusMessage'),
@@ -48,7 +51,9 @@
       state.continuousBlockId = message.continuousBlockId;
       if (!state.blocks.some((block) => block.id === state.activeDbId)) {
         state.activeDbId = state.blocks[0] && state.blocks[0].id;
+        state.selectedVariableId = undefined;
       }
+      ensureSelectedVariable();
       applyOptions();
       render();
       return;
@@ -62,8 +67,9 @@
     if (message.type === 'values') {
       const update = message.update;
       state.values[update.dbId] = update.values;
-    if (update.dbId === state.activeDbId) {
+      if (update.dbId === state.activeDbId) {
         renderVariables();
+        renderVariableOps();
       }
       renderStatus(update.updatedAt);
       renderDbInfo();
@@ -151,6 +157,7 @@
     renderTabs();
     renderDbInfo();
     renderVariables();
+    renderVariableOps();
     renderStatus();
   }
 
@@ -165,6 +172,7 @@
       button.className = 'db-list-select';
       button.addEventListener('click', () => {
         state.activeDbId = block.id;
+        state.selectedVariableId = undefined;
         render();
       });
 
@@ -349,9 +357,11 @@
     const hasBlock = Boolean(block);
     els.empty.classList.toggle('hidden', hasBlock);
     if (!block) {
+      state.selectedVariableId = undefined;
       return;
     }
 
+    ensureSelectedVariable();
     for (const variable of block.variables) {
       renderVariableRow(variable, 0);
     }
@@ -359,6 +369,13 @@
 
   function renderVariableRow(variable, level) {
     const tr = document.createElement('tr');
+    tr.className = variable.id === state.selectedVariableId ? 'selected' : '';
+    tr.title = variable.readable ? 'Select variable' : 'This variable is a container';
+    tr.addEventListener('click', () => {
+      state.selectedVariableId = variable.id;
+      renderVariables();
+      renderVariableOps();
+    });
     const nameCell = document.createElement('td');
     const wrap = document.createElement('div');
     wrap.className = 'name-cell';
@@ -374,9 +391,11 @@
     toggle.textContent = hasChildren ? (isExpanded(variable.id) ? 'v' : '>') : '';
     toggle.title = hasChildren ? 'Toggle' : '';
     if (hasChildren) {
-      toggle.addEventListener('click', () => {
+      toggle.addEventListener('click', (event) => {
+        event.stopPropagation();
         state.expanded[variable.id] = !isExpanded(variable.id);
         renderVariables();
+        renderVariableOps();
       });
     }
     wrap.appendChild(toggle);
@@ -412,6 +431,133 @@
     }
   }
 
+  function renderVariableOps() {
+    els.variableOps.textContent = '';
+    const block = activeBlock();
+    if (!block) {
+      els.variableOps.classList.add('hidden');
+      return;
+    }
+
+    els.variableOps.classList.remove('hidden');
+    ensureSelectedVariable();
+    const variable = selectedVariable();
+    if (!variable) {
+      els.variableOps.appendChild(operationNotice('Select a readable variable to operate.'));
+      return;
+    }
+
+    const header = document.createElement('div');
+    header.className = 'operation-summary';
+    header.appendChild(infoItem('Variable', variable.path.join('.'), 'wide'));
+    header.appendChild(infoItem('Type', variable.type));
+    header.appendChild(infoItem('Address', formatAddress(variable)));
+    header.appendChild(infoItem('Current', formatOperationValue(variable)));
+    els.variableOps.appendChild(header);
+
+    const controls = document.createElement('div');
+    controls.className = 'operation-controls';
+    const writable = writeKind(variable);
+    const canWrite = block.number !== undefined && state.status.state === 'connected' && writable !== 'unsupported';
+
+    if (block.number === undefined) {
+      controls.appendChild(operationNotice('Set DB number before writing.'));
+    } else if (state.status.state !== 'connected') {
+      controls.appendChild(operationNotice('Connect PLC before writing.'));
+    } else if (writable === 'unsupported') {
+      controls.appendChild(operationNotice(`${variable.type} write is not supported.`));
+    }
+
+    if (writable === 'bool') {
+      const label = document.createElement('label');
+      label.className = 'switch operation-switch';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = currentValues()[variable.id] === true;
+      input.disabled = !canWrite;
+      input.addEventListener('change', () => {
+        vscode.postMessage({
+          type: 'writeVariable',
+          request: {
+            dbId: block.id,
+            variableId: variable.id,
+            value: input.checked
+          }
+        });
+      });
+      label.appendChild(input);
+      label.appendChild(document.createTextNode('Set Bool'));
+      controls.appendChild(label);
+    } else if (writable === 'integer' || writable === 'float') {
+      if (writable === 'integer') {
+        const radixLabel = document.createElement('label');
+        radixLabel.className = 'operation-field compact';
+        radixLabel.textContent = 'Base';
+        const select = document.createElement('select');
+        for (const option of [
+          ['10', 'Dec'],
+          ['16', 'Hex'],
+          ['2', 'Bin'],
+          ['8', 'Oct']
+        ]) {
+          const opt = document.createElement('option');
+          opt.value = option[0];
+          opt.textContent = option[1];
+          select.appendChild(opt);
+        }
+        select.value = String(state.writeRadix);
+        select.addEventListener('change', () => {
+          state.writeRadix = Number(select.value);
+          renderVariableOps();
+        });
+        radixLabel.appendChild(select);
+        controls.appendChild(radixLabel);
+      }
+
+      const valueLabel = document.createElement('label');
+      valueLabel.className = 'operation-field';
+      valueLabel.textContent = 'Value';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.disabled = !canWrite;
+      input.value = defaultWriteValue(variable, writable);
+      input.placeholder = writable === 'integer' ? '0' : '0.0';
+      valueLabel.appendChild(input);
+      controls.appendChild(valueLabel);
+
+      const writeButton = document.createElement('button');
+      writeButton.textContent = 'Write';
+      writeButton.disabled = !canWrite;
+      const write = () => {
+        vscode.postMessage({
+          type: 'writeVariable',
+          request: {
+            dbId: block.id,
+            variableId: variable.id,
+            value: input.value,
+            radix: writable === 'integer' ? state.writeRadix : 10
+          }
+        });
+      };
+      writeButton.addEventListener('click', write);
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !writeButton.disabled) {
+          write();
+        }
+      });
+      controls.appendChild(writeButton);
+    }
+
+    els.variableOps.appendChild(controls);
+  }
+
+  function operationNotice(text) {
+    const notice = document.createElement('span');
+    notice.className = 'operation-notice';
+    notice.textContent = text;
+    return notice;
+  }
+
   function textCell(text) {
     const td = document.createElement('td');
     td.textContent = text;
@@ -423,8 +569,112 @@
     return state.blocks.find((block) => block.id === state.activeDbId);
   }
 
+  function selectedVariable() {
+    const block = activeBlock();
+    if (!block) {
+      return undefined;
+    }
+    return flattenVariables(block.variables).find((variable) => variable.id === state.selectedVariableId);
+  }
+
+  function ensureSelectedVariable() {
+    const block = activeBlock();
+    if (!block) {
+      state.selectedVariableId = undefined;
+      return;
+    }
+
+    const variables = flattenVariables(block.variables);
+    if (variables.some((variable) => variable.id === state.selectedVariableId)) {
+      return;
+    }
+
+    const firstReadable = variables.find((variable) => variable.readable);
+    state.selectedVariableId = firstReadable && firstReadable.id;
+  }
+
+  function flattenVariables(variables) {
+    const result = [];
+    for (const variable of variables) {
+      result.push(variable);
+      result.push(...flattenVariables(variable.children || []));
+    }
+    return result;
+  }
+
   function currentValues() {
     return state.values[state.activeDbId] || {};
+  }
+
+  function writeKind(variable) {
+    const type = normalizeValueType(variable.type);
+    if (!variable.readable) {
+      return 'unsupported';
+    }
+    if (type === 'bool') {
+      return 'bool';
+    }
+    if (['byte', 'usint', 'sint', 'word', 'uint', 'int', 'dword', 'udint', 'dint', 'lword', 'ulint', 'lint'].includes(type)) {
+      return 'integer';
+    }
+    if (type === 'real' || type === 'lreal') {
+      return 'float';
+    }
+    return 'unsupported';
+  }
+
+  function normalizeValueType(type) {
+    return type.trim().replace(/\s+/g, '').toLowerCase();
+  }
+
+  function formatOperationValue(variable) {
+    const value = currentValues()[variable.id];
+    if (value === undefined || value === null) {
+      return '-';
+    }
+    if (writeKind(variable) === 'integer' && (typeof value === 'number' || typeof value === 'string')) {
+      return formatIntegerValue(value, state.writeRadix);
+    }
+    return formatValue(variable);
+  }
+
+  function defaultWriteValue(variable, kind) {
+    const value = currentValues()[variable.id];
+    if (kind === 'integer' && (typeof value === 'number' || typeof value === 'string')) {
+      return formatIntegerValue(value, state.writeRadix);
+    }
+    if (kind === 'float' && typeof value === 'number') {
+      return String(value);
+    }
+    return '';
+  }
+
+  function formatIntegerValue(value, radix) {
+    if (radix === 10) {
+      return String(value);
+    }
+    const integer = parseDisplayInteger(value);
+    if (integer === undefined) {
+      return String(value);
+    }
+    const prefix = radix === 16 ? '16#' : radix === 2 ? '2#' : '8#';
+    const sign = integer < 0n ? '-' : '';
+    const abs = integer < 0n ? -integer : integer;
+    return `${sign}${prefix}${abs.toString(radix).toUpperCase()}`;
+  }
+
+  function parseDisplayInteger(value) {
+    try {
+      if (typeof value === 'number') {
+        return Number.isInteger(value) ? BigInt(value) : undefined;
+      }
+      if (/^[+-]?\d+$/.test(value.trim())) {
+        return BigInt(value.trim());
+      }
+    } catch {
+      return undefined;
+    }
+    return undefined;
   }
 
   function isExpanded(id) {

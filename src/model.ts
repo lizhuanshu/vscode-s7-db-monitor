@@ -44,3 +44,10 @@ export interface VariableValueUpdate {
   values: Record<string, string | number | boolean | null>;
   updatedAt: string;
 }
+
+export interface VariableWriteRequest {
+  dbId: string;
+  variableId: string;
+  value: string | number | boolean;
+  radix?: number;
+}
