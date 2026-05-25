@@ -10,6 +10,7 @@
     expanded: {},
     writeRadix: 10,
     boolPulseMs: 500,
+    operationFeedback: undefined,
     options: {
       host: '192.168.0.1',
       rack: 0,
@@ -61,19 +62,20 @@
       return;
     }
     if (message.type === 'status') {
+      const previousState = state.status.state;
       state.status = message.status;
       renderStatus();
-      renderDbInfo();
+      if (previousState !== state.status.state) {
+        renderDbInfo();
+      }
+      applyWriteStatusFeedback(message.status);
       return;
     }
     if (message.type === 'values') {
       const update = message.update;
       state.values[update.dbId] = update.values;
       if (update.dbId === state.activeDbId) {
-        renderVariables();
-        if (!isEditingInside(els.variableOps)) {
-          renderVariableOps();
-        }
+        updateVariableValues();
       }
       renderStatus(update.updatedAt);
     }
@@ -212,6 +214,7 @@
       button.addEventListener('click', () => {
         state.activeDbId = block.id;
         state.selectedVariableId = undefined;
+        state.operationFeedback = undefined;
         render();
       });
 
@@ -412,6 +415,7 @@
     tr.title = variable.readable ? 'Select variable' : 'This variable is a container';
     tr.addEventListener('click', () => {
       state.selectedVariableId = variable.id;
+      state.operationFeedback = undefined;
       renderVariables();
       renderVariableOps();
     });
@@ -453,12 +457,10 @@
     tr.appendChild(textCell(variable.type));
     tr.appendChild(textCell(formatAddress(variable)));
 
-    const valueCell = textCell(formatValue(variable));
+    const valueCell = textCell('');
+    valueCell.dataset.valueId = variable.id;
     valueCell.classList.add('value');
-    const value = currentValues()[variable.id];
-    if (typeof value === 'boolean') {
-      valueCell.classList.add(value ? 'boolean-true' : 'boolean-false');
-    }
+    applyValueCell(valueCell, variable);
     tr.appendChild(valueCell);
     tr.appendChild(textCell(variable.id));
     els.variables.appendChild(tr);
@@ -468,6 +470,52 @@
         renderVariableRow(child, level + 1);
       }
     }
+  }
+
+  function updateVariableValues() {
+    const block = activeBlock();
+    if (!block) {
+      return;
+    }
+
+    const valueCells = new Map();
+    for (const cell of els.variables.querySelectorAll('[data-value-id]')) {
+      valueCells.set(cell.dataset.valueId, cell);
+    }
+    updateVariableValueRows(block.variables, valueCells);
+    updateOperationCurrentValue();
+  }
+
+  function updateVariableValueRows(variables, valueCells) {
+    for (const variable of variables) {
+      const cell = valueCells.get(variable.id);
+      if (cell) {
+        applyValueCell(cell, variable);
+      }
+      updateVariableValueRows(variable.children || [], valueCells);
+    }
+  }
+
+  function applyValueCell(cell, variable) {
+    const text = formatValue(variable);
+    cell.textContent = text;
+    cell.title = text;
+    cell.classList.remove('boolean-true', 'boolean-false');
+    const value = currentValues()[variable.id];
+    if (typeof value === 'boolean') {
+      cell.classList.add(value ? 'boolean-true' : 'boolean-false');
+    }
+  }
+
+  function updateOperationCurrentValue() {
+    const element = els.variableOps.querySelector('[data-operation-current]');
+    const variable = selectedVariable();
+    if (!element || !variable) {
+      return;
+    }
+
+    element.textContent = formatOperationValue(variable);
+    element.title = element.textContent;
   }
 
   function renderVariableOps() {
@@ -491,8 +539,15 @@
     header.appendChild(infoItem('Variable', variable.path.join('.'), 'wide'));
     header.appendChild(infoItem('Type', variable.type));
     header.appendChild(infoItem('Address', formatAddress(variable)));
-    header.appendChild(infoItem('Current', formatOperationValue(variable)));
+    const currentItem = infoItem('Current', formatOperationValue(variable));
+    currentItem.querySelector('.info-value').dataset.operationCurrent = 'true';
+    header.appendChild(currentItem);
     els.variableOps.appendChild(header);
+
+    const feedbackWrap = document.createElement('div');
+    feedbackWrap.className = 'operation-feedback-wrap';
+    feedbackWrap.appendChild(operationFeedbackElement());
+    els.variableOps.appendChild(feedbackWrap);
 
     const controls = document.createElement('div');
     controls.className = 'operation-controls';
@@ -509,6 +564,7 @@
 
     if (writable === 'bool') {
       const writeBool = (value) => {
+        setOperationFeedback('pending', `Writing ${value ? 'True' : 'False'}...`);
         vscode.postMessage({
           type: 'writeVariable',
           request: {
@@ -542,17 +598,29 @@
       pulseInput.value = String(state.boolPulseMs);
       pulseInput.disabled = !canWrite;
       pulseInput.addEventListener('change', () => {
+        const validation = validatePulseMs(pulseInput.value);
+        if (validation) {
+          setOperationFeedback('error', validation);
+          return;
+        }
         state.boolPulseMs = clampPulseMs(pulseInput.value);
         pulseInput.value = String(state.boolPulseMs);
+        clearOperationFeedback();
         persistUiState();
       });
       pulseLabel.appendChild(pulseInput);
       controls.appendChild(pulseLabel);
 
       const pulse = (pattern) => {
+        const validation = validatePulseMs(pulseInput.value);
+        if (validation) {
+          setOperationFeedback('error', validation);
+          return;
+        }
         state.boolPulseMs = clampPulseMs(pulseInput.value);
         pulseInput.value = String(state.boolPulseMs);
         persistUiState();
+        setOperationFeedback('pending', `Pulsing ${pattern === 'false-true-false' ? 'F-T-F' : 'T-F-T'}...`);
         vscode.postMessage({
           type: 'pulseVariable',
           request: {
@@ -611,6 +679,7 @@
       input.disabled = !canWrite;
       input.value = defaultWriteValue(variable, writable);
       input.placeholder = writePlaceholder(variable, writable);
+      input.addEventListener('input', () => clearOperationFeedback());
       valueLabel.appendChild(input);
       controls.appendChild(valueLabel);
 
@@ -618,6 +687,12 @@
       writeButton.textContent = 'Write';
       writeButton.disabled = !canWrite;
       const write = () => {
+        const validation = validateWriteValue(variable, writable, input.value);
+        if (validation) {
+          setOperationFeedback('error', validation);
+          return;
+        }
+        setOperationFeedback('pending', 'Writing...');
         vscode.postMessage({
           type: 'writeVariable',
           request: {
@@ -647,6 +722,74 @@
     return notice;
   }
 
+  function operationFeedbackElement() {
+    const feedback = currentOperationFeedback();
+    const item = document.createElement('span');
+    item.className = feedback ? `operation-feedback ${feedback.kind}` : 'operation-feedback hidden';
+    item.textContent = feedback ? feedback.message : '';
+    return item;
+  }
+
+  function setOperationFeedback(kind, message) {
+    const block = activeBlock();
+    if (!block || !state.selectedVariableId) {
+      return;
+    }
+
+    state.operationFeedback = {
+      dbId: block.id,
+      variableId: state.selectedVariableId,
+      kind,
+      message
+    };
+    renderOperationFeedback();
+  }
+
+  function clearOperationFeedback() {
+    if (!currentOperationFeedback()) {
+      return;
+    }
+    state.operationFeedback = undefined;
+    renderOperationFeedback();
+  }
+
+  function currentOperationFeedback() {
+    const feedback = state.operationFeedback;
+    if (!feedback || feedback.dbId !== state.activeDbId || feedback.variableId !== state.selectedVariableId) {
+      return undefined;
+    }
+    return feedback;
+  }
+
+  function renderOperationFeedback() {
+    const element = els.variableOps.querySelector('.operation-feedback');
+    if (!element) {
+      return;
+    }
+
+    const feedback = currentOperationFeedback();
+    element.className = feedback ? `operation-feedback ${feedback.kind}` : 'operation-feedback hidden';
+    element.textContent = feedback ? feedback.message : '';
+  }
+
+  function applyWriteStatusFeedback(status) {
+    const feedback = currentOperationFeedback();
+    if (!feedback) {
+      return;
+    }
+
+    const message = status.message || '';
+    if (status.state === 'error') {
+      if (feedback.kind === 'pending') {
+        setOperationFeedback('error', message || 'Write failed.');
+      }
+      return;
+    }
+    if (status.state === 'connected' && /^Write completed:|^Pulse completed:/.test(message)) {
+      setOperationFeedback('success', message);
+    }
+  }
+
   function textCell(text) {
     const td = document.createElement('td');
     td.textContent = text;
@@ -660,10 +803,23 @@
 
   function selectedVariable() {
     const block = activeBlock();
-    if (!block) {
+    if (!block || !state.selectedVariableId) {
       return undefined;
     }
-    return flattenVariables(block.variables).find((variable) => variable.id === state.selectedVariableId);
+    return findVariableById(block.variables, state.selectedVariableId);
+  }
+
+  function findVariableById(variables, id) {
+    for (const variable of variables) {
+      if (variable.id === id) {
+        return variable;
+      }
+      const child = findVariableById(variable.children || [], id);
+      if (child) {
+        return child;
+      }
+    }
+    return undefined;
   }
 
   function ensureSelectedVariable() {
@@ -775,6 +931,217 @@
       return '1990-01-01T00:00:00.000Z';
     }
     return 'text';
+  }
+
+  function validateWriteValue(variable, kind, value) {
+    if (kind === 'integer') {
+      return validateIntegerWrite(variable, value);
+    }
+    if (kind === 'float') {
+      return Number.isFinite(Number(value.trim())) ? undefined : 'Enter a valid numeric value.';
+    }
+    if (kind === 'datetime') {
+      return validateDateTimeWrite(variable, value);
+    }
+    if (kind === 'text') {
+      return validateTextWrite(variable, value);
+    }
+    return undefined;
+  }
+
+  function validateIntegerWrite(variable, value) {
+    const range = integerRange(variable.type);
+    if (!range) {
+      return undefined;
+    }
+
+    const parsed = parseIntegerInput(value, state.writeRadix);
+    if (parsed === undefined) {
+      return 'Enter a valid integer value.';
+    }
+    if (parsed < range.min || parsed > range.max) {
+      return `${variable.type} value must be between ${range.min} and ${range.max}.`;
+    }
+    return undefined;
+  }
+
+  function integerRange(type) {
+    const ranges = {
+      byte: [0n, 0xffn],
+      usint: [0n, 0xffn],
+      sint: [-0x80n, 0x7fn],
+      word: [0n, 0xffffn],
+      uint: [0n, 0xffffn],
+      int: [-0x8000n, 0x7fffn],
+      dword: [0n, 0xffffffffn],
+      udint: [0n, 0xffffffffn],
+      dint: [-0x80000000n, 0x7fffffffn],
+      lword: [0n, 0xffffffffffffffffn],
+      ulint: [0n, 0xffffffffffffffffn],
+      lint: [-0x8000000000000000n, 0x7fffffffffffffffn]
+    };
+    const range = ranges[normalizeValueType(type)];
+    return range ? { min: range[0], max: range[1] } : undefined;
+  }
+
+  function parseIntegerInput(value, radix) {
+    const normalizedRadix = [2, 8, 10, 16].includes(radix) ? radix : 10;
+    const text = value.trim().replace(/_/g, '');
+    const sign = text.startsWith('-') ? -1n : 1n;
+    const unsigned = text.replace(/^[+-]/, '').replace(/^0x/i, '').replace(/^16#/i, '').replace(/^2#/i, '').replace(/^8#/i, '');
+    if (!unsigned || !isIntegerDigits(unsigned, normalizedRadix)) {
+      return undefined;
+    }
+    try {
+      return sign * parseUnsignedBigInt(unsigned, normalizedRadix);
+    } catch {
+      return undefined;
+    }
+  }
+
+  function parseUnsignedBigInt(text, radix) {
+    if (radix === 16) {
+      return BigInt(`0x${text}`);
+    }
+    if (radix === 8) {
+      return BigInt(`0o${text}`);
+    }
+    if (radix === 2) {
+      return BigInt(`0b${text}`);
+    }
+    return BigInt(text);
+  }
+
+  function isIntegerDigits(text, radix) {
+    if (radix === 2) {
+      return /^[01]+$/i.test(text);
+    }
+    if (radix === 8) {
+      return /^[0-7]+$/i.test(text);
+    }
+    if (radix === 16) {
+      return /^[0-9a-f]+$/i.test(text);
+    }
+    return /^\d+$/i.test(text);
+  }
+
+  function validateDateTimeWrite(variable, value) {
+    const type = normalizeValueType(variable.type);
+    const text = value.trim();
+    if (type === 'date') {
+      return isValidDateText(text.replace(/^(date|d)#/i, '')) ? undefined : 'Enter a Date value as YYYY-MM-DD.';
+    }
+    if (type === 'time') {
+      return isValidTimeDuration(text) ? undefined : 'Enter a Time value like T#0d_01:02:03.004.';
+    }
+    if (type === 'tod' || type === 'time_of_day' || type === 'timeofday') {
+      return isValidTimeOfDay(text, 3) ? undefined : 'Enter a TOD value as HH:mm:ss.mmm.';
+    }
+    if (type === 'ltod' || type === 'ltime_of_day' || type === 'ltimeofday') {
+      return isValidTimeOfDay(text, 9) ? undefined : 'Enter an LTOD value as HH:mm:ss.nnnnnnnnn.';
+    }
+    if (type === 'dt' || type === 'date_and_time' || type === 'dateandtime' || type === 'ldt' || type === 'dtl') {
+      return isValidDateTimeText(text) ? undefined : 'Enter a date-time value like 1990-01-01T00:00:00.000Z.';
+    }
+    return undefined;
+  }
+
+  function isValidDateText(text) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (!match) {
+      return false;
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  }
+
+  function isValidTimeDuration(text) {
+    const colon = /^([+-])?(?:time#|t#)?(?:(\d+)d_?)?(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/i.exec(text);
+    if (colon) {
+      return Number(colon[3]) <= 23 && Number(colon[4]) <= 59 && Number(colon[5]) <= 59;
+    }
+
+    const source = text.trim().replace(/^(time|t)#/i, '').replace(/^[+-]/, '');
+    const tokenRegexp = /(\d+(?:\.\d+)?)(ms|d|h|m|s)/gi;
+    let consumed = '';
+    let match;
+    while ((match = tokenRegexp.exec(source)) !== null) {
+      consumed += match[0];
+    }
+    return Boolean(consumed) && consumed.length === source.replace(/_/g, '').length;
+  }
+
+  function isValidTimeOfDay(value, fractionDigits) {
+    const text = value.trim().replace(/^(tod|time_of_day|timeofday|ltod|ltime_of_day|ltimeofday)#/i, '');
+    const match = /^(\d{1,2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?$/.exec(text);
+    if (!match) {
+      return false;
+    }
+
+    const fraction = match[4] || '';
+    return Number(match[1]) <= 23 && Number(match[2]) <= 59 && Number(match[3]) <= 59 && fraction.length <= fractionDigits;
+  }
+
+  function isValidDateTimeText(value) {
+    const text = value.trim().replace(/^(date_and_time|dt|ldt|dtl)#/i, '');
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(text)
+      ? `${text}T00:00:00.000Z`
+      : /(?:z|[+-]\d{2}:?\d{2})$/i.test(text)
+        ? text
+        : `${text}Z`;
+    return !Number.isNaN(new Date(normalized).getTime());
+  }
+
+  function validateTextWrite(variable, value) {
+    const type = normalizeValueType(variable.type);
+    const text = unquoteWriteText(value);
+    if (type === 'char' || type === 'wchar') {
+      return text.length <= 1 ? undefined : `${variable.type} value must be zero or one character.`;
+    }
+
+    const declaredLength = stringDeclaredLength(type);
+    if (declaredLength === undefined) {
+      return undefined;
+    }
+    if (text.length > declaredLength) {
+      return `${variable.type} value must be ${declaredLength} characters or fewer.`;
+    }
+    if (type.startsWith('string[') && !isLatin1Text(text)) {
+      return 'String values only support single-byte characters.';
+    }
+    return undefined;
+  }
+
+  function unquoteWriteText(value) {
+    const text = value.trim();
+    const quoted = /^(['"])([\s\S]*)\1$/.exec(text);
+    return quoted ? quoted[2] : value;
+  }
+
+  function stringDeclaredLength(type) {
+    const match = /\[(\d+)\]$/i.exec(type);
+    return match ? Number(match[1]) : undefined;
+  }
+
+  function isLatin1Text(text) {
+    for (let index = 0; index < text.length; index++) {
+      if (text.charCodeAt(index) > 0xff) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function validatePulseMs(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || !Number.isInteger(number) || number < 0 || number > 600000) {
+      return 'Pulse time must be between 0 and 600000 ms.';
+    }
+    return undefined;
   }
 
   function formatIntegerValue(value, radix) {

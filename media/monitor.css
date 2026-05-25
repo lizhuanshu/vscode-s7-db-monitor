@@ -447,7 +447,7 @@ tbody tr.selected td:nth-child(4) {
 .variable-ops {
   min-height: 58px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 360px) auto;
   align-items: center;
   gap: 12px;
   padding: 7px 10px;
@@ -456,12 +456,17 @@ tbody tr.selected td:nth-child(4) {
 }
 
 .operation-summary,
+.operation-feedback-wrap,
 .operation-controls {
   min-width: 0;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.operation-feedback-wrap {
+  justify-content: center;
 }
 
 .operation-field {
@@ -523,6 +528,26 @@ tbody tr.selected td:nth-child(4) {
 .operation-notice {
   color: var(--vscode-descriptionForeground);
   white-space: nowrap;
+}
+
+.operation-feedback {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.operation-feedback.error {
+  color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground));
+}
+
+.operation-feedback.success {
+  color: var(--vscode-testing-iconPassed);
+}
+
+.operation-feedback.pending {
+  color: var(--vscode-descriptionForeground);
 }
 
 @media (max-width: 720px) {
