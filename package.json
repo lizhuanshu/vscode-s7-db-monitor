@@ -2,7 +2,7 @@
   "name": "againdo-s7-db-monitor",
   "displayName": "S7 DB Monitor Plus",
   "description": "Monitor Siemens S7 PLC DB blocks from TIA Portal exported .db files.",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "publisher": "lizhuanshu",
   "icon": "images/icon.png",
   "author": "liming",

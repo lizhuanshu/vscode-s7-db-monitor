@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to semantic versioning before marketplace releases.
 
+## [0.0.7] - 2026-05-29
+
+### Changed
+
+- Renamed the image asset directory to lowercase `images/` for consistent README links on GitHub and in packaged extensions.
+- Updated README image references to use the lowercase `images/` path.
+
 ## [0.0.6] - 2026-05-29
 
 ### Added
