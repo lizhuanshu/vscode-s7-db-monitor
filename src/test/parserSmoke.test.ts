@@ -60,12 +60,31 @@ STRUCT
 END_STRUCT;
 END_TYPE
 
+TYPE "Tank water"
+VERSION : 0.1
+STRUCT
+  "Tank water_bool" : Array[1..5] of Bool;
+END_STRUCT;
+END_TYPE
+
+TYPE "Tank WasteLiquid"
+VERSION : 0.1
+STRUCT
+  "Tank WasteLiquid" : Array[1..5] of Bool;
+END_STRUCT;
+END_TYPE
+
 DATA_BLOCK "DB_A"
 STRUCT
   chars : Array[0..19] of Char;
   flag : Bool;
   udt : "UDT1";
   udt2 : "UDT2";
+  "Tank water" : "Tank water";
+  "Tank WasteLiquid" : "Tank WasteLiquid";
+  others : Struct
+    flag : Bool;
+  END_STRUCT;
 END_STRUCT;
 BEGIN
 END_DATA_BLOCK
@@ -93,7 +112,38 @@ assert.strictEqual(blocks[0]?.variables[3]?.children[1]?.children[10]?.offset.by
 assert.strictEqual(blocks[0]?.variables[3]?.children[1]?.children[10]?.offset.bit, 2);
 assert.strictEqual(blocks[0]?.variables[3]?.children[2]?.offset.byte, 36);
 assert.strictEqual(blocks[0]?.variables[3]?.children[2]?.offset.bit, 0);
+assert.strictEqual(blocks[0]?.variables[4]?.type, 'Tank water');
+assert.strictEqual(blocks[0]?.variables[4]?.offset.byte, 38);
+assert.strictEqual(blocks[0]?.variables[4]?.children[0]?.children.length, 5);
+assert.strictEqual(blocks[0]?.variables[5]?.type, 'Tank WasteLiquid');
+assert.strictEqual(blocks[0]?.variables[5]?.offset.byte, 40);
+assert.strictEqual(blocks[0]?.variables[5]?.children[0]?.children.length, 5);
+assert.strictEqual(blocks[0]?.variables[6]?.offset.byte, 42);
 assert.strictEqual(blocks[1]?.variables[1]?.offset.byte, 2);
+
+const boolArrayAfterBitsSource = `
+DATA_BLOCK "BoolArrayAfterBitsDb"
+STRUCT
+  Flow_Mode : Bool;
+  Static_2 : Bool;
+  Static_3 : Bool;
+  Chanal1 : Array[0..10] of Bool;
+  Chanal2 : Array[0..10] of Bool;
+END_STRUCT;
+BEGIN
+END_DATA_BLOCK
+`;
+
+const boolArrayAfterBitsBlock = parseDbSource(boolArrayAfterBitsSource, 'BoolArrayAfterBitsDb.db');
+const boolArrayAfterBitsVars = new Map(boolArrayAfterBitsBlock.variables.map((variable) => [variable.name, variable]));
+assert.strictEqual(boolArrayAfterBitsVars.get('Flow_Mode')?.offset.byte, 0);
+assert.strictEqual(boolArrayAfterBitsVars.get('Static_2')?.offset.bit, 1);
+assert.strictEqual(boolArrayAfterBitsVars.get('Static_3')?.offset.bit, 2);
+assert.strictEqual(boolArrayAfterBitsVars.get('Chanal1')?.offset.byte, 2);
+assert.strictEqual(boolArrayAfterBitsVars.get('Chanal1')?.children[0]?.offset.byte, 2);
+assert.strictEqual(boolArrayAfterBitsVars.get('Chanal1')?.children[10]?.offset.byte, 3);
+assert.strictEqual(boolArrayAfterBitsVars.get('Chanal1')?.children[10]?.offset.bit, 2);
+assert.strictEqual(boolArrayAfterBitsVars.get('Chanal2')?.offset.byte, 4);
 
 const boolByteSource = `
 DATA_BLOCK "BoolByteDb"
@@ -116,6 +166,21 @@ assert.strictEqual(boolByteVars.get('byteValue')?.offset.byte, 1);
 assert.strictEqual(boolByteVars.get('wordValue')?.offset.byte, 2);
 assert.strictEqual(boolByteVars.get('dwordValue')?.offset.byte, 4);
 assert.strictEqual(boolByteVars.get('lwordValue')?.offset.byte, 8);
+
+const unicodeNameSource = `
+DATA_BLOCK "UnicodeNameDb"
+STRUCT
+  TM_△P_Flow_Alam : Int; // 流量/压差告警进入时间设定, S
+END_STRUCT;
+BEGIN
+END_DATA_BLOCK
+`;
+
+const unicodeNameBlock = parseDbSource(unicodeNameSource, 'UnicodeNameDb.db');
+assert.strictEqual(unicodeNameBlock.diagnostics.length, 0);
+assert.strictEqual(unicodeNameBlock.variables[0]?.name, 'TM_△P_Flow_Alam');
+assert.strictEqual(unicodeNameBlock.variables[0]?.offset.byte, 0);
+assert.strictEqual(unicodeNameBlock.variables[0]?.comment, '流量/压差告警进入时间设定, S');
 
 const typeSource = `
 DATA_BLOCK "TypeDb"
@@ -159,6 +224,7 @@ assert.strictEqual(typeVars.get('dtl')?.size, 12);
 assert.strictEqual(typeVars.get('wc')?.size, 2);
 assert.strictEqual(typeVars.get('s')?.size, 6);
 assert.strictEqual(typeVars.get('ws')?.size, 12);
+assert.strictEqual(typeVars.get('tod')?.type, 'Time_Of_Day');
 
 const buffer = Buffer.alloc(typeBlock.readSize);
 buffer.writeUInt16BE(1, typeVars.get('d')?.offset.byte ?? 0);

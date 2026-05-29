@@ -282,6 +282,13 @@
 
     const actions = document.createElement('div');
     actions.className = 'db-actions';
+    if (block.diagnostics && block.diagnostics.length > 0) {
+      const notice = document.createElement('span');
+      notice.className = 'db-notice';
+      notice.textContent = `Parse warnings: ${block.diagnostics.length}`;
+      notice.title = block.diagnostics.join('\n');
+      actions.appendChild(notice);
+    }
     if (block.number === undefined) {
       const notice = document.createElement('span');
       notice.className = 'db-notice';
@@ -450,7 +457,7 @@
     valueCell.classList.add('value');
     applyValueCell(valueCell, variable);
     tr.appendChild(valueCell);
-    tr.appendChild(textCell(variable.id));
+    tr.appendChild(textCell(variable.comment || ''));
     target.appendChild(tr);
 
     if (hasChildren && isExpanded(variable.id)) {

@@ -78,17 +78,25 @@ export class MonitorPanel {
     const content = await fs.readFile(uri.fsPath, 'utf8');
     const profile = this.getFileProfile(uri.fsPath);
     const parsedBlocks = parseDbBlocks(content, uri.fsPath);
+    const diagnostics: string[] = [];
     for (const parsed of parsedBlocks) {
       const savedNumber = profile.dbNumbers[parsed.name];
       if (savedNumber !== undefined) {
         parsed.number = savedNumber;
       }
       this.blocks.set(parsed.id, parsed);
+      diagnostics.push(...parsed.diagnostics.map((item) => `${parsed.name}: ${item}`));
     }
     this.activeSourcePath = uri.fsPath;
     this.connectionOptions = profile.connectionOptions ?? this.connectionOptions ?? this.getDefaultOptions();
     this.service.setBlocks([...this.blocks.values()]);
     this.postState();
+
+    if (diagnostics.length > 0) {
+      const preview = diagnostics.slice(0, 3).join(' | ');
+      const suffix = diagnostics.length > 3 ? ` | +${diagnostics.length - 3} more` : '';
+      void vscode.window.showWarningMessage(`DB parse warning: ${preview}${suffix}`);
+    }
   }
 
   public dispose(): void {
@@ -253,7 +261,7 @@ export class MonitorPanel {
               <th>Type</th>
               <th>Address</th>
               <th>Value</th>
-              <th>ID</th>
+              <th>Comment</th>
             </tr>
           </thead>
           <tbody id="variables"></tbody>

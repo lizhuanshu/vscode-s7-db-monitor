@@ -10,6 +10,7 @@ export interface DbVariable {
   type: string;
   offset: DbOffset;
   size: number;
+  comment?: string;
   children: DbVariable[];
   readable: boolean;
 }

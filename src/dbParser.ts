@@ -20,7 +20,13 @@ interface TypeInfo {
 interface Declaration {
   name: string;
   typeText: string;
+  comment?: string;
   structFields?: Declaration[];
+}
+
+interface DeclarationToken {
+  text: string;
+  line: number;
 }
 
 interface UserType {
@@ -71,7 +77,7 @@ export function parseDbSource(source: string, sourcePath: string): ParsedDbBlock
 }
 
 export function parseDbBlocks(source: string, sourcePath: string): ParsedDbBlock[] {
-  const cleaned = stripComments(source);
+  const cleaned = stripBlockComments(source);
   const userTypes = parseUserTypes(cleaned);
   const sections = findNamedSections(cleaned, 'DATA_BLOCK', 'END_DATA_BLOCK');
 
@@ -94,6 +100,10 @@ function parseDbSection(section: string, sourcePath: string, userTypes: Map<stri
 
   for (const declaration of declarations) {
     variables.push(...buildVariable(declaration, [`db:${dbKey}`], cursor, context));
+  }
+
+  if (variables.length === 0) {
+    diagnostics.push('No variables were parsed from this DB block.');
   }
 
   alignToWord(cursor);
@@ -120,10 +130,8 @@ function createEmptyBlock(sourcePath: string, diagnostics: string[] = []): Parse
   };
 }
 
-function stripComments(source: string): string {
-  return source
-    .replace(/\(\*[\s\S]*?\*\)/g, '')
-    .replace(/\/\/.*$/gm, '');
+function stripBlockComments(source: string): string {
+  return source.replace(/\(\*[\s\S]*?\*\)/g, '');
 }
 
 function stripAttributes(source: string): string {
@@ -194,21 +202,29 @@ function parseStaticDeclarations(source: string, diagnostics: string[]): Declara
   return parser.parseRootStruct();
 }
 
-function tokenizeDeclarationBlock(text: string): string[] {
-  const tokens: string[] = [];
-  const regexp = /"[^"]+"|'[^']*'|\.\.|:=|[A-Za-z_][\w]*|\d+|\[|\]|:|;|,/g;
+function tokenizeDeclarationBlock(text: string): DeclarationToken[] {
+  const tokens: DeclarationToken[] = [];
+  const regexp = /\/\/[^\r\n]*|"[^"]+"|'[^']*'|\.\.|:=|[^\s\[\]():;,]+|\d+|\[|\]|:|;|,/g;
   let match: RegExpExecArray | null;
+  let line = 1;
+  let lastIndex = 0;
   while ((match = regexp.exec(text)) !== null) {
-    tokens.push(match[0]);
+    line += countLineBreaks(text.slice(lastIndex, match.index));
+    tokens.push({ text: match[0], line });
+    lastIndex = regexp.lastIndex;
   }
   return tokens;
+}
+
+function countLineBreaks(text: string): number {
+  return (text.match(/\r\n|\r|\n/g) ?? []).length;
 }
 
 class DeclarationParser {
   private index = 0;
 
   public constructor(
-    private readonly tokens: string[],
+    private readonly tokens: DeclarationToken[],
     private readonly diagnostics: string[]
   ) {}
 
@@ -223,6 +239,11 @@ class DeclarationParser {
   private parseDeclarationsUntil(endToken: string): Declaration[] {
     const declarations: Declaration[] = [];
     while (!this.isAtEnd() && !this.peekIs(endToken)) {
+      this.skipLineComments();
+      if (this.peekIs(endToken)) {
+        break;
+      }
+
       const name = this.readName();
       if (!name) {
         this.index++;
@@ -236,24 +257,27 @@ class DeclarationParser {
         continue;
       }
 
-      if (this.consumeIf('STRUCT')) {
+      const structToken = this.consumeIf('STRUCT');
+      if (structToken) {
+        const comment = this.consumeTrailingLineComment(structToken.line);
         const structFields = this.parseDeclarationsUntil('END_STRUCT');
         this.consumeIf('END_STRUCT');
         this.consumeIf(';');
-        declarations.push({ name, typeText: 'STRUCT', structFields });
+        declarations.push({ name, typeText: 'STRUCT', comment, structFields });
         continue;
       }
 
       const typeTokens: string[] = [];
-      while (!this.isAtEnd() && !this.peekIs(';') && !this.peekIs('END_STRUCT')) {
+      while (!this.isAtEnd() && !this.peekIs(';') && !this.peekIs('END_STRUCT') && !this.currentIsLineComment()) {
         const token = this.current();
         if (token) {
-          typeTokens.push(token);
+          typeTokens.push(token.text);
         }
         this.index++;
       }
-      this.consumeIf(';');
-      declarations.push({ name, typeText: joinTypeTokens(typeTokens) });
+      const semicolon = this.consumeIf(';');
+      const comment = semicolon ? this.consumeTrailingLineComment(semicolon.line) : undefined;
+      declarations.push({ name, typeText: joinTypeTokens(typeTokens), comment });
     }
     return declarations;
   }
@@ -264,7 +288,7 @@ class DeclarationParser {
       return undefined;
     }
     this.index++;
-    return stripQuotes(token);
+    return stripQuotes(token.text);
   }
 
   private consumeUntil(...targets: string[]): void {
@@ -273,29 +297,49 @@ class DeclarationParser {
     }
   }
 
-  private consumeIf(token: string): boolean {
+  private consumeIf(token: string): DeclarationToken | undefined {
     if (this.peekIs(token)) {
+      const consumed = this.current();
       this.index++;
-      return true;
+      return consumed;
     }
-    return false;
+    return undefined;
   }
 
   private peekIs(token: string): boolean {
-    return this.current()?.toLowerCase() === token.toLowerCase();
+    return this.current()?.text.toLowerCase() === token.toLowerCase();
   }
 
-  private current(): string | undefined {
+  private current(): DeclarationToken | undefined {
     return this.tokens[this.index];
   }
 
   private isAtEnd(): boolean {
     return this.index >= this.tokens.length;
   }
+
+  private skipLineComments(): void {
+    while (this.currentIsLineComment()) {
+      this.index++;
+    }
+  }
+
+  private currentIsLineComment(): boolean {
+    return this.current()?.text.startsWith('//') ?? false;
+  }
+
+  private consumeTrailingLineComment(line: number): string | undefined {
+    const token = this.current();
+    if (!token || token.line !== line || !token.text.startsWith('//')) {
+      return undefined;
+    }
+    this.index++;
+    return token.text.slice(2).trim();
+  }
 }
 
 function joinTypeTokens(tokens: string[]): string {
-  return tokens.join('').replace(/^Array/i, 'Array').replace(/of/i, ' of ');
+  return tokens.join('');
 }
 
 function stripQuotes(token: string): string {
@@ -312,7 +356,7 @@ function buildVariable(
   context: ParserContext
 ): DbVariable[] {
   const typeInfo = parseTypeInfo(declaration, context);
-  return instantiateVariable(declaration.name, typeInfo, parentPath, cursor, context);
+  return instantiateVariable(declaration.name, typeInfo, parentPath, cursor, context, declaration.comment);
 }
 
 function instantiateVariable(
@@ -320,10 +364,11 @@ function instantiateVariable(
   typeInfo: TypeInfo,
   parentPath: string[],
   cursor: Cursor,
-  context: ParserContext
+  context: ParserContext,
+  comment?: string
 ): DbVariable[] {
   if (typeInfo.kind === 'array' && typeInfo.elementType && typeInfo.arrayStart !== undefined && typeInfo.arrayEnd !== undefined) {
-    alignBeforeType(cursor, typeInfo.elementType);
+    alignBeforeArray(cursor);
     const startCursor = cloneCursor(cursor);
     const children: DbVariable[] = [];
     for (let index = typeInfo.arrayStart; index <= typeInfo.arrayEnd; index++) {
@@ -332,7 +377,7 @@ function instantiateVariable(
     if (typeInfo.elementType.displayType.toLowerCase() === 'bool') {
       alignToNextByte(cursor);
     }
-    const arrayVariable = createVariable(name, parentPath, typeInfo.displayType, startCursor, cursorDistance(startCursor, cursor), false, children);
+    const arrayVariable = createVariable(name, parentPath, typeInfo.displayType, startCursor, cursorDistance(startCursor, cursor), false, children, comment);
     return [arrayVariable];
   }
 
@@ -344,13 +389,13 @@ function instantiateVariable(
       children.push(...buildVariable(field, [...parentPath, name], cursor, context));
     }
     alignToWord(cursor);
-    return [createVariable(name, parentPath, typeInfo.displayType, startCursor, cursorDistance(startCursor, cursor), false, children)];
+    return [createVariable(name, parentPath, typeInfo.displayType, startCursor, cursorDistance(startCursor, cursor), false, children, comment)];
   }
 
   alignBeforeType(cursor, typeInfo);
   const offset = cloneCursor(cursor);
   advanceCursor(cursor, typeInfo);
-  return [createVariable(name, parentPath, typeInfo.displayType, offset, typeInfo.size, typeInfo.readable, [])];
+  return [createVariable(name, parentPath, typeInfo.displayType, offset, typeInfo.size, typeInfo.readable, [], comment)];
 }
 
 function instantiateArrayElement(
@@ -381,12 +426,11 @@ function parseTypeInfo(declaration: Declaration, context: ParserContext): TypeIn
   }
 
   const typeText = declaration.typeText.trim();
-  const normalized = typeText.replace(/\s+/g, '');
-  const arrayMatch = /^Array\[(\d+)\.\.(\d+)\]of(.+)$/i.exec(normalized);
+  const arrayMatch = /^Array\s*\[\s*(\d+)\s*\.\.\s*(\d+)\s*\]\s*of\s*(.+)$/i.exec(typeText);
   if (arrayMatch) {
     const arrayStart = Number(arrayMatch[1]);
     const arrayEnd = Number(arrayMatch[2]);
-    const elementDeclaration: Declaration = { name: declaration.name, typeText: arrayMatch[3] ?? '' };
+    const elementDeclaration: Declaration = { name: declaration.name, typeText: arrayMatch[3]?.trim() ?? '' };
     const elementType = parseTypeInfo(elementDeclaration, context);
     return {
       kind: 'array',
@@ -399,8 +443,9 @@ function parseTypeInfo(declaration: Declaration, context: ParserContext): TypeIn
     };
   }
 
-  const unquotedType = stripQuotes(normalized);
-  const userType = context.userTypes.get(unquotedType.toLowerCase());
+  const unquotedType = stripQuotes(typeText).trim();
+  const compactType = unquotedType.replace(/\s+/g, '');
+  const userType = context.userTypes.get(unquotedType.toLowerCase()) ?? context.userTypes.get(compactType.toLowerCase());
   if (userType) {
     return {
       kind: 'struct',
@@ -411,7 +456,7 @@ function parseTypeInfo(declaration: Declaration, context: ParserContext): TypeIn
     };
   }
 
-  const stringMatch = /^String(?:\[(\d+)\])?$/i.exec(unquotedType);
+  const stringMatch = /^String(?:\[(\d+)\])?$/i.exec(compactType);
   if (stringMatch) {
     const declaredLength = stringMatch[1] ? Number(stringMatch[1]) : 254;
     return {
@@ -422,7 +467,7 @@ function parseTypeInfo(declaration: Declaration, context: ParserContext): TypeIn
     };
   }
 
-  const wStringMatch = /^WString(?:\[(\d+)\])?$/i.exec(unquotedType);
+  const wStringMatch = /^WString(?:\[(\d+)\])?$/i.exec(compactType);
   if (wStringMatch) {
     const declaredLength = wStringMatch[1] ? Number(wStringMatch[1]) : 254;
     return {
@@ -433,7 +478,7 @@ function parseTypeInfo(declaration: Declaration, context: ParserContext): TypeIn
     };
   }
 
-  const primitive = unquotedType.toLowerCase();
+  const primitive = compactType.toLowerCase();
   if (Object.prototype.hasOwnProperty.call(primitiveSizes, primitive)) {
     return {
       kind: 'primitive',
@@ -462,6 +507,10 @@ function alignBeforeType(cursor: Cursor, typeInfo: TypeInfo): void {
     return;
   }
 
+  alignToWord(cursor);
+}
+
+function alignBeforeArray(cursor: Cursor): void {
   alignToWord(cursor);
 }
 
@@ -519,7 +568,8 @@ function createVariable(
   offset: Cursor,
   size: number,
   readable: boolean,
-  children: DbVariable[]
+  children: DbVariable[],
+  comment?: string
 ): DbVariable {
   const pathParts = [...parentPath, name];
   return {
@@ -529,6 +579,7 @@ function createVariable(
     type,
     offset: { byte: offset.byte, bit: type.toLowerCase() === 'bool' ? offset.bit : undefined },
     size,
+    comment,
     children,
     readable
   };
