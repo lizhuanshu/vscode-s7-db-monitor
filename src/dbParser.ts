@@ -20,6 +20,7 @@ interface TypeInfo {
 interface Declaration {
   name: string;
   typeText: string;
+  line: number;
   comment?: string;
   structFields?: Declaration[];
 }
@@ -82,6 +83,9 @@ export function parseDbBlocks(source: string, sourcePath: string): ParsedDbBlock
   const sections = findNamedSections(cleaned, 'DATA_BLOCK', 'END_DATA_BLOCK');
 
   if (sections.length === 0) {
+    if (/\bDATA_BLOCK\b/i.test(cleaned)) {
+      return [createEmptyBlock(sourcePath, ['DATA_BLOCK declaration was found but END_DATA_BLOCK was missing.'])];
+    }
     return [createEmptyBlock(sourcePath, ['DATA_BLOCK declaration was not found.'])];
   }
 
@@ -229,31 +233,39 @@ class DeclarationParser {
   ) {}
 
   public parseRootStruct(): Declaration[] {
-    this.consumeUntil('STRUCT');
-    if (!this.consumeIf('STRUCT')) {
+    const structToken = this.consumeUntilToken('STRUCT');
+    if (!structToken) {
       return [];
     }
-    return this.parseDeclarationsUntil('END_STRUCT');
+    this.consumeIf('STRUCT');
+    const declarations = this.parseDeclarationsUntil('END_STRUCT');
+    if (!this.peekIs('END_STRUCT')) {
+      this.diagnostics.push('STRUCT declaration is missing END_STRUCT.');
+      return declarations;
+    }
+    this.consumeIf('END_STRUCT');
+    return declarations;
   }
 
   private parseDeclarationsUntil(endToken: string): Declaration[] {
     const declarations: Declaration[] = [];
-    while (!this.isAtEnd() && !this.peekIs(endToken)) {
+    while (!this.isAtEnd()) {
       this.skipLineComments();
       if (this.peekIs(endToken)) {
-        break;
+        return declarations;
       }
 
-      const name = this.readName();
-      if (!name) {
+      const nameToken = this.readName();
+      if (!nameToken) {
         this.index++;
         continue;
       }
+      const { name, line } = nameToken;
 
       if (!this.consumeIf(':')) {
         this.consumeUntil(';', endToken);
         this.consumeIf(';');
-        this.diagnostics.push(`Variable ${name} is missing a type separator.`);
+        this.diagnostics.push(`Variable ${name} (line ${line}) is missing a type separator.`);
         continue;
       }
 
@@ -261,9 +273,13 @@ class DeclarationParser {
       if (structToken) {
         const comment = this.consumeTrailingLineComment(structToken.line);
         const structFields = this.parseDeclarationsUntil('END_STRUCT');
-        this.consumeIf('END_STRUCT');
+        if (!this.peekIs('END_STRUCT')) {
+          this.diagnostics.push(`STRUCT ${name} (line ${line}) is missing END_STRUCT.`);
+        } else {
+          this.consumeIf('END_STRUCT');
+        }
         this.consumeIf(';');
-        declarations.push({ name, typeText: 'STRUCT', comment, structFields });
+        declarations.push({ name, typeText: 'STRUCT', line, comment, structFields });
         continue;
       }
 
@@ -277,24 +293,35 @@ class DeclarationParser {
       }
       const semicolon = this.consumeIf(';');
       const comment = semicolon ? this.consumeTrailingLineComment(semicolon.line) : undefined;
-      declarations.push({ name, typeText: joinTypeTokens(typeTokens), comment });
+      if (typeTokens.length === 0) {
+        this.diagnostics.push(`Variable ${name} (line ${line}) is missing a type.`);
+      }
+      if (!semicolon) {
+        this.diagnostics.push(`Variable ${name} (line ${line}) is missing a semicolon.`);
+      }
+      declarations.push({ name, typeText: joinTypeTokens(typeTokens), line, comment });
     }
     return declarations;
   }
 
-  private readName(): string | undefined {
+  private readName(): { name: string; line: number } | undefined {
     const token = this.current();
     if (!token) {
       return undefined;
     }
     this.index++;
-    return stripQuotes(token.text);
+    return { name: stripQuotes(token.text), line: token.line };
   }
 
   private consumeUntil(...targets: string[]): void {
     while (!this.isAtEnd() && !targets.some((target) => this.peekIs(target))) {
       this.index++;
     }
+  }
+
+  private consumeUntilToken(token: string): DeclarationToken | undefined {
+    this.consumeUntil(token);
+    return this.current();
   }
 
   private consumeIf(token: string): DeclarationToken | undefined {
@@ -426,11 +453,20 @@ function parseTypeInfo(declaration: Declaration, context: ParserContext): TypeIn
   }
 
   const typeText = declaration.typeText.trim();
+  if (!typeText) {
+    context.diagnostics.push(`Variable ${declaration.name} (line ${declaration.line}) has an empty type.`);
+    return {
+      kind: 'unknown',
+      size: 0,
+      readable: false,
+      displayType: 'Unknown'
+    };
+  }
   const arrayMatch = /^Array\s*\[\s*(\d+)\s*\.\.\s*(\d+)\s*\]\s*of\s*(.+)$/i.exec(typeText);
   if (arrayMatch) {
     const arrayStart = Number(arrayMatch[1]);
     const arrayEnd = Number(arrayMatch[2]);
-    const elementDeclaration: Declaration = { name: declaration.name, typeText: arrayMatch[3]?.trim() ?? '' };
+    const elementDeclaration: Declaration = { name: declaration.name, typeText: arrayMatch[3]?.trim() ?? '', line: declaration.line };
     const elementType = parseTypeInfo(elementDeclaration, context);
     return {
       kind: 'array',
@@ -488,7 +524,7 @@ function parseTypeInfo(declaration: Declaration, context: ParserContext): TypeIn
     };
   }
 
-  context.diagnostics.push(`Unsupported type ${typeText}; it will be displayed as a zero-byte placeholder.`);
+  context.diagnostics.push(`Unsupported type ${typeText} for ${declaration.name} (line ${declaration.line}); it will be displayed as a zero-byte placeholder.`);
   return {
     kind: 'unknown',
     size: 0,

@@ -226,6 +226,20 @@ assert.strictEqual(typeVars.get('s')?.size, 6);
 assert.strictEqual(typeVars.get('ws')?.size, 12);
 assert.strictEqual(typeVars.get('tod')?.type, 'Time_Of_Day');
 
+const brokenStructSource = `
+DATA_BLOCK "BrokenDb"
+STRUCT
+  ok : Int;
+  broken : Struct
+    child : Bool;
+END_STRUCT;
+BEGIN
+END_DATA_BLOCK
+`;
+
+const brokenStructBlock = parseDbSource(brokenStructSource, 'BrokenDb.db');
+assert.ok(brokenStructBlock.diagnostics.some((item) => item.includes('missing END_STRUCT')));
+
 const buffer = Buffer.alloc(typeBlock.readSize);
 buffer.writeUInt16BE(1, typeVars.get('d')?.offset.byte ?? 0);
 buffer.writeInt32BE(3723004, typeVars.get('t')?.offset.byte ?? 0);
