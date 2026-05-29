@@ -254,14 +254,21 @@ export class MonitorPanel {
     <section class="db-content">
       <section id="dbInfo" class="db-info"></section>
       <section class="table-wrap">
-        <table>
+        <table id="variablesTable">
+          <colgroup>
+            <col class="column-name">
+            <col class="column-type">
+            <col class="column-address">
+            <col class="column-value">
+            <col class="column-comment">
+          </colgroup>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Address</th>
-              <th>Value</th>
-              <th>Comment</th>
+              <th data-column-id="name">Name<span class="column-resizer" title="Resize column"></span></th>
+              <th data-column-id="type">Type<span class="column-resizer" title="Resize column"></span></th>
+              <th data-column-id="address">Address<span class="column-resizer" title="Resize column"></span></th>
+              <th data-column-id="value">Value<span class="column-resizer" title="Resize column"></span></th>
+              <th data-column-id="comment">Comment<span class="column-resizer" title="Resize column"></span></th>
             </tr>
           </thead>
           <tbody id="variables"></tbody>

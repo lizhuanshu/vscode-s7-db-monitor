@@ -40,11 +40,20 @@
     empty: document.getElementById('empty'),
     statusState: document.getElementById('statusState'),
     statusMessage: document.getElementById('statusMessage'),
-    statusStats: document.getElementById('statusStats')
+    statusStats: document.getElementById('statusStats'),
+    variablesTable: document.getElementById('variablesTable')
   };
   const persisted = vscode.getState() || {};
   state.sidebarWidth = clampSidebarWidth(persisted.sidebarWidth || 280);
   state.boolPulseMs = clampPulseMs(persisted.boolPulseMs || state.boolPulseMs);
+  state.columnWidths = {
+    name: persisted.columnWidths?.name,
+    type: persisted.columnWidths?.type,
+    address: persisted.columnWidths?.address,
+    value: persisted.columnWidths?.value,
+    comment: persisted.columnWidths?.comment
+  };
+  state.columnOrder = ['name', 'type', 'address', 'value', 'comment'];
 
   window.addEventListener('message', (event) => {
     const message = event.data;
@@ -99,9 +108,11 @@
     });
   }
   els.sidebarResizer.addEventListener('pointerdown', startSidebarResize);
+  setupColumnResizing();
 
   vscode.postMessage({ type: 'ready' });
   applySidebarLayout();
+  applyColumnWidths();
 
   function applyOptions() {
     applyInputValue(els.host, state.options.host);
@@ -179,8 +190,88 @@
   function persistUiState() {
     vscode.setState({
       sidebarWidth: state.sidebarWidth,
-      boolPulseMs: state.boolPulseMs
+      boolPulseMs: state.boolPulseMs,
+      columnWidths: state.columnWidths
     });
+  }
+
+  function setupColumnResizing() {
+    if (!els.variablesTable) {
+      return;
+    }
+
+    for (const handle of els.variablesTable.querySelectorAll('.column-resizer')) {
+      handle.addEventListener('pointerdown', startColumnResize);
+    }
+  }
+
+  function startColumnResize(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const th = event.currentTarget?.parentElement;
+    const columnId = th?.dataset.columnId;
+    if (!th || !columnId) {
+      return;
+    }
+
+    const startX = event.clientX;
+    const startWidth = th.getBoundingClientRect().width;
+    const minWidths = {
+      name: 120,
+      type: 80,
+      address: 80,
+      value: 100,
+      comment: 120
+    };
+
+    th.setPointerCapture(event.pointerId);
+    document.body.classList.add('resizing-column');
+
+    const onMove = (moveEvent) => {
+      const nextWidth = Math.max(minWidths[columnId] || 80, Math.round(startWidth + (moveEvent.clientX - startX)));
+      state.columnWidths[columnId] = nextWidth;
+      applyColumnWidths();
+    };
+    const onUp = (upEvent) => {
+      th.releasePointerCapture(upEvent.pointerId);
+      document.body.classList.remove('resizing-column');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      persistUiState();
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  function applyColumnWidths() {
+    if (!els.variablesTable) {
+      return;
+    }
+
+    let totalWidth = 0;
+    for (const columnId of state.columnOrder) {
+      const width = state.columnWidths[columnId];
+      const col = els.variablesTable.querySelector(`col.column-${columnId}`);
+      if (col) {
+        const appliedWidth = width || defaultColumnWidth(columnId);
+        col.style.width = `${appliedWidth}px`;
+        totalWidth += appliedWidth;
+      }
+    }
+    els.variablesTable.style.width = `${Math.max(totalWidth, 860)}px`;
+  }
+
+  function defaultColumnWidth(columnId) {
+    const widths = {
+      name: 320,
+      type: 180,
+      address: 120,
+      value: 180,
+      comment: 260
+    };
+    return widths[columnId] || 160;
   }
 
   function clampSidebarWidth(width) {

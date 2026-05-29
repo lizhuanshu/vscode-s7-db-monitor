@@ -324,10 +324,29 @@ select {
 }
 
 table {
-  width: 100%;
   min-width: 860px;
   border-collapse: collapse;
   table-layout: fixed;
+}
+
+col.column-name {
+  width: 30%;
+}
+
+col.column-type {
+  width: 18%;
+}
+
+col.column-address {
+  width: 12%;
+}
+
+col.column-value {
+  width: 16%;
+}
+
+col.column-comment {
+  width: 24%;
 }
 
 thead {
@@ -350,33 +369,28 @@ td {
 }
 
 th {
+  position: relative;
   color: var(--vscode-descriptionForeground);
   font-weight: 600;
+}
+
+.column-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.column-resizer:hover,
+.resizing-column .column-resizer {
+  background: var(--vscode-focusBorder);
 }
 
 th:nth-child(4),
 td:nth-child(4) {
   background: color-mix(in srgb, var(--vscode-editor-selectionBackground) 18%, transparent);
-}
-
-th:nth-child(1) {
-  width: 30%;
-}
-
-th:nth-child(2) {
-  width: 18%;
-}
-
-th:nth-child(3) {
-  width: 12%;
-}
-
-th:nth-child(4) {
-  width: 16%;
-}
-
-th:nth-child(5) {
-  width: 24%;
 }
 
 tbody tr:hover {
@@ -578,6 +592,10 @@ tbody tr.selected td:nth-child(4) {
 
   .operation-controls {
     justify-content: flex-start;
+  }
+
+  table {
+    min-width: 720px;
   }
 }
 
