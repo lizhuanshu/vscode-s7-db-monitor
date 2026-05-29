@@ -10,7 +10,11 @@ S7 DB Monitor is a VS Code extension for monitoring Siemens S7 PLC DB blocks fro
 
 This project is provided as-is. The project does not provide technical support, troubleshooting, customization, maintenance, warranty or service commitments. Users are responsible for evaluating risks before using it with PLC devices.
 
-![Demo](play.gif)
+![ExportDB](./images/ExportDB.png)
+
+![Demo](./images/play.gif)
+
+![Demo 2](./images/play2.gif)
 
 ## Features
 
@@ -99,7 +103,7 @@ GitHub: <https://github.com/lizhuanshu/vscode-s7-db-monitor>
 ## Company
 
 <div align="center">
-  <img alt="AgainDo" src="company.jpeg" width="200" />
+  <img alt="AgainDo" src="./images/company.jpeg" width="200" />
   <p><strong>AgainDo</strong></p>
 </div>
 

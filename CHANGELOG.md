@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to semantic versioning before marketplace releases.
 
+## [0.0.6] - 2026-05-29
+
+### Added
+
+- Added resizable variable table columns in the monitor view.
+- Added parser diagnostics and comment support for DB block declarations.
+- Added diagnostics for missing `END_STRUCT` in nested structures.
+
+### Changed
+
+- Improved monitor table rendering and column layout behavior.
+- Reorganized image assets under `images/` and updated documentation references.
+
+### Fixed
+
+- Fixed version metadata and lockfile version alignment.
+
 ## [0.0.5] - 2026-05-25
 
 ### Changed
